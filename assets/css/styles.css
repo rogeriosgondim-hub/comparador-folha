@@ -106,3 +106,5 @@ tbody tr.row-divergencia:hover td { background:#ffe9e6; }
 tbody tr.row-centavos:hover td { background:#fff3cc; }
 .metric.critical { border:2px solid var(--danger); background:var(--danger-bg); }
 .metric.critical .label, .metric.critical .value { color:var(--danger); }
+
+.result-alert.no-data { background:#fff7d6; color:#7a5200; border-color:#f2d17a; }
