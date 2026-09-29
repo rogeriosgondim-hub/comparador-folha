@@ -71,6 +71,7 @@
         </div>
         <button id="exportBtn" class="primary">Exportar divergências para Excel</button>
       </div>
+      <div id="resultAlert" class="result-alert hidden"></div>
       <div id="summaryCards" class="summary-grid"></div>
     </section>
 
@@ -81,6 +82,7 @@
           <p id="resultCount"></p>
         </div>
         <div class="filters">
+          <button id="divergenceOnlyBtn" class="secondary" type="button">Mostrar só divergências</button>
           <input id="searchInput" type="search" placeholder="Buscar nome ou CPF..." />
           <select id="statusFilter">
             <option value="ALL">Todos os status</option>
