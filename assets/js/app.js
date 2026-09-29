@@ -244,6 +244,48 @@ function statusClass(s){
   if(s===STATUS.OK)return'ok'; if(s===STATUS.DIV)return'divergencia'; if(s===STATUS.CENT)return'centavos';
   if(s===STATUS.TRCT)return'trct'; if(s===STATUS.NOVO)return'novo'; if(s===STATUS.DUP)return'duplicado'; if(s===STATUS.VER)return'verificar'; return'ausente';
 }
+function actionableStatuses(){ return new Set([STATUS.DIV,STATUS.CENT,STATUS.SO_ORIG,STATUS.SO_FOLHA,STATUS.DUP,STATUS.VER]); }
+function pendingReason(r){
+  if(r.status===STATUS.DIV) return 'Diferença de líquido acima do limite de centavos.';
+  if(r.status===STATUS.CENT) return 'Diferença de líquido dentro do limite de centavos configurado.';
+  if(r.status===STATUS.SO_ORIG) return 'Registro existe no Excel original, mas não foi encontrado na folha.';
+  if(r.status===STATUS.SO_FOLHA) return 'Registro existe na folha, mas não foi encontrado no Excel original.';
+  if(r.status===STATUS.DUP) return 'Mais de um registro possível para a mesma chave.';
+  if(r.status===STATUS.VER) return 'Faltam dados suficientes para validar o registro automaticamente.';
+  return '';
+}
+function renderApprovalStatus(){
+  const actionable=actionableStatuses();
+  const pend=state.results.filter(r=>actionable.has(r.status));
+  const comparable=state.results.filter(r=>Number.isFinite(r.originalNet)&&Number.isFinite(r.folhaNet)&&r.status!==STATUS.TRCT);
+  const hasAnyOriginalValue=state.results.some(r=>Number.isFinite(r.originalNet));
+  const el=$('approvalStatus');
+  el.classList.remove('hidden','approved','review','partial');
+  if(!hasAnyOriginalValue || !comparable.length){
+    el.classList.add('partial');
+    el.innerHTML='<div class="icon">◐</div><div><strong>Validação parcial</strong><span>Estrutura, CPF, nomes, presença/ausência, novos colaboradores e TRCT foram avaliados, mas não há líquido original suficiente para concluir a aprovação monetária.</span></div>';
+  }else if(pend.length){
+    el.classList.add('review');
+    el.innerHTML='<div class="icon">⚠</div><div><strong>Requer conferência</strong><span>'+pend.length+' pendência(s) precisam ser revisada(s) antes do fechamento.</span></div>';
+  }else{
+    el.classList.add('approved');
+    el.innerHTML='<div class="icon">✓</div><div><strong>Folha aprovada</strong><span>Nenhuma divergência ou pendência de conferência foi encontrada nos critérios atuais.</span></div>';
+  }
+}
+function renderPending(){
+  const actionable=actionableStatuses();
+  const rows=state.results.filter(r=>actionable.has(r.status));
+  $('pendingCount').textContent=rows.length ? rows.length+' pendência(s) encontrada(s)' : 'Sem pendências';
+  $('pendingBody').innerHTML=rows.map(r=>'<tr class="row-'+statusClass(r.status)+'">'+
+    '<td><span class="status '+statusClass(r.status)+'">'+esc(r.status)+'</span></td>'+
+    '<td>'+esc(fmtCpf(r.cpf))+'</td><td>'+esc(r.name)+'</td>'+
+    '<td class="money">'+(r.originalNet===null?'—':moneyFmt.format(r.originalNet))+'</td>'+
+    '<td class="money">'+(r.folhaNet===null?'—':moneyFmt.format(r.folhaNet))+'</td>'+
+    '<td class="money">'+(r.diff===null?'—':moneyFmt.format(r.diff))+'</td>'+
+    '<td>'+esc(pendingReason(r))+'</td></tr>').join('');
+  $('pendingEmpty').classList.toggle('hidden',rows.length!==0);
+  $('pendingWrap').classList.toggle('hidden',rows.length===0);
+}
 function renderSummary(){
   const r=state.results, count=s=>r.filter(x=>x.status===s).length;
   const sum=(arr,k)=>arr.reduce((a,x)=>a+(Number.isFinite(x[k])?x[k]:0),0);
@@ -321,7 +363,7 @@ function exportXlsx(){
 }
 
 async function run(){
-  hideMsg(); $('summarySection').classList.add('hidden'); $('resultsSection').classList.add('hidden'); $('diagnosticsSection').classList.add('hidden');
+  hideMsg(); $('summarySection').classList.add('hidden'); $('pendingSection').classList.add('hidden'); $('resultsSection').classList.add('hidden'); $('diagnosticsSection').classList.add('hidden');
   $('compareBtn').disabled=true;
   try{
     progress(5,'Lendo Excel...');
@@ -332,8 +374,8 @@ async function run(){
     const tol=Number($('tolerance').value||.01), cents=Math.max(tol,Number($('centsLimit').value||1));
     state.results=compare(state.original,state.folha,tol,cents);
     state.diagnostics={sheetName:ex.sheetName,headerRow:ex.headerRow,originalCount:ex.records.length,pdfPages:pf.pages,folhaCount:pf.records.length};
-    renderSummary(); renderResults(); renderDiag();
-    $('summarySection').classList.remove('hidden'); $('resultsSection').classList.remove('hidden'); $('diagnosticsSection').classList.remove('hidden');
+    renderSummary(); renderApprovalStatus(); renderPending(); renderResults(); renderDiag();
+    $('summarySection').classList.remove('hidden'); $('pendingSection').classList.remove('hidden'); $('resultsSection').classList.remove('hidden'); $('diagnosticsSection').classList.remove('hidden');
     progress(100,'Concluído.'); setTimeout(()=>$('progressWrap').classList.add('hidden'),500);
     msg('Comparação concluída: '+state.original.length+' registros no Excel e '+state.folha.length+' colaboradores identificados no PDF.');
   }catch(e){ console.error(e); $('progressWrap').classList.add('hidden'); msg(e?.message||'Erro ao processar os arquivos.','error'); }
@@ -342,7 +384,7 @@ async function run(){
 function reset(){
   Object.assign(state,{excelFile:null,pdfFile:null,original:[],folha:[],results:[],diagnostics:{}});
   $('excelFile').value='';$('pdfFile').value='';$('excelStatus').textContent='Nenhum arquivo selecionado.';$('pdfStatus').textContent='Nenhum arquivo selecionado.';
-  $('summarySection').classList.add('hidden');$('resultsSection').classList.add('hidden');$('diagnosticsSection').classList.add('hidden');hideMsg();$('progressWrap').classList.add('hidden');ready();
+  $('summarySection').classList.add('hidden');$('pendingSection').classList.add('hidden');$('resultsSection').classList.add('hidden');$('diagnosticsSection').classList.add('hidden');hideMsg();$('progressWrap').classList.add('hidden');ready();
 }
 $('compareBtn').addEventListener('click',run);
 $('resetBtn').addEventListener('click',reset);
