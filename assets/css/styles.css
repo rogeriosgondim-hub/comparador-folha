@@ -142,3 +142,10 @@ tbody tr.row-naoencontrado td, tbody tr.row-duplicado td, tbody tr.row-verificar
   .module-tab { width:100%; text-align:left; }
   .preserve-banner { flex-direction:column; }
 }
+
+.history-table { min-width:1180px; }
+.history-table td, .history-table th { white-space:nowrap; }
+.history-status { display:inline-block; padding:5px 9px; border-radius:999px; font-size:.72rem; font-weight:900; }
+.history-status.approved { background:var(--ok-bg); color:var(--ok); }
+.history-status.review { background:var(--danger-bg); color:var(--danger); }
+.history-status.partial { background:var(--warn-bg); color:#7a5200; }
