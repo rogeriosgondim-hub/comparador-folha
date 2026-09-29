@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Comparador local de folha de pagamento: Excel x PDF, sem upload para servidor." />
+  <title>Comparador de Folha de Pagamento</title>
+  <link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Processamento 100% local no navegador</p>
+      <h1>Comparador de Folha de Pagamento</h1>
+      <p class="subtitle">Compare o Excel original com o PDF da folha por CPF e nome normalizado, tratando TRCT e rescisões separadamente.</p>
+    </div>
+    <div class="privacy-badge">🔒 Arquivos não são enviados</div>
+  </header>
+
+  <main class="container">
+    <section class="card intro-card">
+      <div>
+        <h2>1. Carregue os arquivos</h2>
+        <p>Selecione o Excel original e o PDF da folha. Todo o processamento acontece apenas nesta aba do navegador.</p>
+      </div>
+      <div class="settings-row">
+        <label>
+          Tolerância (R$)
+          <input id="tolerance" type="number" min="0" step="0.01" value="0.01" />
+        </label>
+        <label>
+          Limite para “diferença de centavos” (R$)
+          <input id="centsLimit" type="number" min="0.01" step="0.01" value="1.00" />
+        </label>
+      </div>
+
+      <div class="upload-grid">
+        <label class="dropzone" id="excelDrop">
+          <span class="drop-icon">📗</span>
+          <strong>Excel original</strong>
+          <span>.xlsx, .xls ou .csv</span>
+          <input id="excelFile" type="file" accept=".xlsx,.xls,.csv" />
+          <small id="excelStatus">Nenhum arquivo selecionado.</small>
+        </label>
+
+        <label class="dropzone" id="pdfDrop">
+          <span class="drop-icon">📄</span>
+          <strong>PDF da folha</strong>
+          <span>Extrato mensal / folha de pagamento</span>
+          <input id="pdfFile" type="file" accept="application/pdf,.pdf" />
+          <small id="pdfStatus">Nenhum arquivo selecionado.</small>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="compareBtn" class="primary" disabled>Comparar arquivos</button>
+        <button id="resetBtn" class="secondary">Limpar</button>
+      </div>
+      <div id="progressWrap" class="progress-wrap hidden" aria-live="polite">
+        <div class="progress"><div id="progressBar"></div></div>
+        <span id="progressText">Preparando...</span>
+      </div>
+      <div id="message" class="message hidden" role="status"></div>
+    </section>
+
+    <section id="summarySection" class="hidden">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Resultado</p>
+          <h2>2. Painel de resumo</h2>
+        </div>
+        <button id="exportBtn" class="primary">Exportar divergências para Excel</button>
+      </div>
+      <div id="summaryCards" class="summary-grid"></div>
+    </section>
+
+    <section id="resultsSection" class="card hidden">
+      <div class="section-heading table-heading">
+        <div>
+          <h2>3. Resultado detalhado</h2>
+          <p id="resultCount"></p>
+        </div>
+        <div class="filters">
+          <input id="searchInput" type="search" placeholder="Buscar nome ou CPF..." />
+          <select id="statusFilter">
+            <option value="ALL">Todos os status</option>
+            <option value="OK">OK</option>
+            <option value="DIVERGÊNCIA">Divergência</option>
+            <option value="DIFERENÇA DE CENTAVOS">Diferença de centavos</option>
+            <option value="TRCT">TRCT</option>
+            <option value="NOVO COLABORADOR">Novo colaborador</option>
+            <option value="SOMENTE NO ORIGINAL">Somente no original</option>
+            <option value="SOMENTE NA FOLHA">Somente na folha</option>
+            <option value="DUPLICADO">Duplicado</option>
+            <option value="VERIFICAR">Verificar</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>CPF</th>
+              <th>Nome</th>
+              <th>Vínculo / tipo</th>
+              <th>Obs. original</th>
+              <th>Líquido original</th>
+              <th>Líquido folha</th>
+              <th>TRCT folha</th>
+              <th>Diferença</th>
+              <th>Chave usada</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="diagnosticsSection" class="card hidden">
+      <h2>Diagnóstico da importação</h2>
+      <div id="diagnostics"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Comparador de Folha de Pagamento • execução local • GitHub Pages</p>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
