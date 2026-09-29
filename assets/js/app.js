@@ -247,14 +247,17 @@ function statusClass(s){
 function renderSummary(){
   const r=state.results, count=s=>r.filter(x=>x.status===s).length;
   const sum=(arr,k)=>arr.reduce((a,x)=>a+(Number.isFinite(x[k])?x[k]:0),0);
-  const originalTotal=sum(r.filter(x=>x.status!==STATUS.SO_FOLHA),'originalNet');
+  const validOriginal=r.filter(x=>x.status!==STATUS.SO_FOLHA && Number.isFinite(x.originalNet));
+  const comparable=r.filter(x=>Number.isFinite(x.originalNet)&&Number.isFinite(x.folhaNet)&&x.status!==STATUS.TRCT);
+  const originalTotal=sum(validOriginal,'originalNet');
   const folhaTotal=sum(r.filter(x=>x.status!==STATUS.SO_ORIG),'folhaNet');
   const trctTotal=sum(r,'trctNet');
-  const eff=r.filter(x=>[STATUS.OK,STATUS.CENT,STATUS.DIV].includes(x.status)&&Number.isFinite(x.diff)).reduce((a,x)=>a+x.diff,0);
+  const eff=comparable.filter(x=>Number.isFinite(x.diff)).reduce((a,x)=>a+x.diff,0);
+  const canCompareMoney=comparable.length>0;
   const metrics=[
-    ['Total original',moneyFmt.format(originalTotal),'info'],['Total folha (mensal)',moneyFmt.format(folhaTotal),'info'],
-    ['Total TRCT extraído',moneyFmt.format(trctTotal),'warn'],['Diferença efetiva',moneyFmt.format(eff),Math.abs(eff)<=Number($('tolerance').value||.01)?'good':'bad'],
-    ['Colaboradores OK',count(STATUS.OK),'good'],['Divergências de líquido',count(STATUS.DIV)+count(STATUS.CENT),(count(STATUS.DIV)+count(STATUS.CENT))>0?'critical':'good'],
+    ['Total original',validOriginal.length?moneyFmt.format(originalTotal):'N/D','info'],['Total folha (mensal)',moneyFmt.format(folhaTotal),'info'],
+    ['Total TRCT extraído',moneyFmt.format(trctTotal),'warn'],['Diferença efetiva',canCompareMoney?moneyFmt.format(eff):'N/D',canCompareMoney?(Math.abs(eff)<=Number($('tolerance').value||.01)?'good':'bad'):'warn'],
+    ['Colaboradores OK',count(STATUS.OK),'good'],['Divergências de líquido',canCompareMoney?(count(STATUS.DIV)+count(STATUS.CENT)):'N/D',canCompareMoney?((count(STATUS.DIV)+count(STATUS.CENT))>0?'critical':'good'):'warn'],
     ['Ausentes',count(STATUS.SO_ORIG)+count(STATUS.SO_FOLHA),'warn'],['Pendentes / duplicados',count(STATUS.VER)+count(STATUS.DUP),'warn'],
     ['TRCT / rescisões',count(STATUS.TRCT),'warn'],['Novos colaboradores',count(STATUS.NOVO),'info']
   ];
@@ -262,8 +265,12 @@ function renderSummary(){
   const divCount=count(STATUS.DIV)+count(STATUS.CENT);
   const centsCount=count(STATUS.CENT);
   const alert=$('resultAlert');
-  alert.classList.remove('hidden','has-div','no-div');
-  if(divCount>0){
+  alert.classList.remove('hidden','has-div','no-div','no-data');
+  if(!canCompareMoney){
+    alert.classList.add('no-data');
+    alert.innerHTML='⚠ Comparação de líquido não realizada.'+
+      '<span class="sub">O Excel original não contém valores preenchidos em “Remuneração líquida a receber”. CPF, nome, TRCT, novos colaboradores e presença/ausência continuam sendo validados, mas não é correto afirmar que há 0 divergências de líquido.</span>';
+  }else if(divCount>0){
     alert.classList.add('has-div');
     alert.innerHTML='⚠ Foram encontradas <strong>'+divCount+'</strong> divergência(s) de líquido.'+
       '<span class="sub">'+centsCount+' classificada(s) como diferença de centavos. Use “Mostrar só divergências” para revisar apenas esses casos.</span>';
@@ -293,6 +300,11 @@ function renderDiag(){
   '<div><strong>TRCT:</strong> rescisões são tratadas separadamente do líquido mensal.</div>';
 }
 function exportXlsx(){
+  const comparableCount=state.results.filter(r=>Number.isFinite(r.originalNet)&&Number.isFinite(r.folhaNet)&&r.status!==STATUS.TRCT).length;
+  if(!comparableCount){
+    msg('O Excel original não possui valores de líquido preenchidos. Não há comparação monetária válida para exportar.','error');
+    return;
+  }
   const rows=state.results.filter(r=>r.status===STATUS.DIV||r.status===STATUS.CENT).map(r=>({
     Status:r.status,CPF:fmtCpf(r.cpf),Nome:r.name,'Vínculo / Tipo':r.type,'Observação original':r.obs,
     'Líquido original':r.originalNet,'Líquido folha':r.folhaNet,'TRCT folha':r.trctNet,'Diferença':r.diff,
