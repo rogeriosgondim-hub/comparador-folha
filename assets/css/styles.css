@@ -108,3 +108,13 @@ tbody tr.row-centavos:hover td { background:#fff3cc; }
 .metric.critical .label, .metric.critical .value { color:var(--danger); }
 
 .result-alert.no-data { background:#fff7d6; color:#7a5200; border-color:#f2d17a; }
+
+.approval-status { display:flex; align-items:center; gap:14px; margin:0 0 14px; padding:18px 20px; border-radius:16px; border:2px solid transparent; box-shadow:0 4px 14px rgba(16,24,40,.04); }
+.approval-status .icon { font-size:1.8rem; line-height:1; }
+.approval-status strong { display:block; font-size:1.15rem; }
+.approval-status span { display:block; margin-top:3px; font-size:.9rem; font-weight:650; }
+.approval-status.approved { background:var(--ok-bg); color:var(--ok); border-color:#9bd5b1; }
+.approval-status.review { background:var(--danger-bg); color:var(--danger); border-color:#efb1aa; }
+.approval-status.partial { background:var(--warn-bg); color:#7a5200; border-color:#e9c765; }
+.pending-empty { padding:16px; border-radius:12px; background:var(--ok-bg); color:var(--ok); font-weight:800; }
+#pendingSection table { min-width:900px; }
