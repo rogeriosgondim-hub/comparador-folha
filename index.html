@@ -158,6 +158,39 @@
       <div id="diagnostics"></div>
     </section>
 
+    <section id="historySection" class="card">
+      <div class="section-heading table-heading">
+        <div>
+          <p class="eyebrow">Somente neste navegador</p>
+          <h2>5. Histórico resumido das competências</h2>
+          <p>São armazenados apenas totais e indicadores da comparação. Nomes, CPFs, PDFs e planilhas não são salvos.</p>
+        </div>
+        <button id="clearHistoryBtn" class="secondary" type="button">Limpar histórico</button>
+      </div>
+      <div id="historyEmpty" class="pending-empty">Nenhuma competência registrada neste navegador.</div>
+      <div id="historyWrap" class="table-wrap hidden">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Competência</th>
+              <th>Status</th>
+              <th>Colaboradores</th>
+              <th>OK</th>
+              <th>Divergências</th>
+              <th>Pendências</th>
+              <th>TRCT</th>
+              <th>Novos</th>
+              <th>Total original</th>
+              <th>Total folha</th>
+              <th>Diferença efetiva</th>
+              <th>Processado em</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </section>
+
     </div>
 
     <div id="fillModule" class="module-panel hidden">
