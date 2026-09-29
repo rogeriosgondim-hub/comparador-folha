@@ -24,12 +24,36 @@ function fmtCpf(v){ const d=cpf(v); return d?d.replace(/(\d{3})(\d{3})(\d{3})(\d
 function money(v){
   if(v===null||v===undefined||v==='') return null;
   if(typeof v==='number'&&Number.isFinite(v)) return v;
-  const s0=String(v).trim(); if(!s0||/^(NDA|N\/A|NA|-)$/i.test(s0)) return null;
-  const s=s0.replace(/R\$/gi,'').replace(/\s/g,'');
-  if(/^-?\d{1,3}(\.\d{3})*,\d{2}$/.test(s)) return Number(s.replace(/\./g,'').replace(',','.'));
-  if(/^-?\d+,\d{2}$/.test(s)) return Number(s.replace(',','.'));
-  if(/^-?\d+(\.\d{1,2})?$/.test(s)) return Number(s);
-  return null;
+  const raw=String(v).trim();
+  if(!raw||/^(NDA|N\/A|NA|-)$/i.test(raw)) return null;
+
+  let s=raw.replace(/R\$/gi,'').replace(/\s/g,'').replace(/[^0-9,().+\-]/g,'');
+  let negative=false;
+  if(/^\(.*\)$/.test(s)){ negative=true; s=s.slice(1,-1); }
+  if(s.startsWith('-')){ negative=true; s=s.slice(1); }
+  s=s.replace(/\+/g,'');
+  if(!s) return null;
+
+  const lastComma=s.lastIndexOf(',');
+  const lastDot=s.lastIndexOf('.');
+  let normalized=s;
+
+  if(lastComma>=0 && lastDot>=0){
+    if(lastComma>lastDot){
+      normalized=s.replace(/\./g,'').replace(',','.');
+    }else{
+      normalized=s.replace(/,/g,'');
+    }
+  }else if(lastComma>=0){
+    const decimals=s.length-lastComma-1;
+    normalized=decimals===2 ? s.replace(/\./g,'').replace(',','.') : s.replace(/,/g,'');
+  }else if(lastDot>=0){
+    const decimals=s.length-lastDot-1;
+    normalized=decimals===2 ? s.replace(/,/g,'') : s.replace(/\./g,'');
+  }
+
+  const n=Number(normalized);
+  return Number.isFinite(n) ? (negative?-n:n) : null;
 }
 function hasTrct(...v){ return /\bTRCT\b|\bRESCISAO\b|\bDEMITID[OA]\b|\bDEMISSAO\b/.test(norm(v.join(' '))); }
 function hasNovo(...v){ return /NOVO COLABORADOR/.test(norm(v.join(' '))); }
@@ -134,7 +158,8 @@ function parsePdfPage(lines,page){
     if(!rawName||!ccpf) continue;
 
     let end=i+1;
-    while(end<lines.length && !/Empr\.:/i.test(lines[end])) end++;
+    const isSummaryBoundary=line=>/^(RESUMO POR RUBRICA|RESUMO POR CENTRO|RESUMO GERAL|TOTAIS? DA FOLHA|TOTALIZACAO|BASES? DA FOLHA)/.test(norm(line));
+    while(end<lines.length && !/Empr\.:/i.test(lines[end]) && !isSummaryBoundary(lines[end])) end++;
     const block=lines.slice(i,end);
     const text=block.join(' ');
     const vinc=(text.match(/V[ií]nculo:\s*(.+?)(?:\s+CC:|\s+Depto:|\s+Horas M[eê]s:)/i)||[])[1]?.trim()||'';
@@ -203,7 +228,7 @@ function compare(original,folha,tol,cents){
     if(o.isTRCT||f.isTRCT){
       const target=f.trctValue??f.net;
       const diff=o.net!==null&&target!==null?target-o.net:null;
-      out.push(result(o,f,(o.net===null||target===null)?STATUS.VER:STATUS.TRCT,key,diff)); continue;
+      out.push(result(o,f,STATUS.TRCT,key,diff)); continue;
     }
     const diff=o.net!==null&&f.net!==null?f.net-o.net:null;
     if(o.isNew){out.push(result(o,f,STATUS.NOVO,key,diff));continue;}
