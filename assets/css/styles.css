@@ -118,3 +118,27 @@ tbody tr.row-centavos:hover td { background:#fff3cc; }
 .approval-status.partial { background:var(--warn-bg); color:#7a5200; border-color:#e9c765; }
 .pending-empty { padding:16px; border-radius:12px; background:var(--ok-bg); color:var(--ok); font-weight:800; }
 #pendingSection table { min-width:900px; }
+
+
+/* Módulos */
+.module-tabs { display:flex; gap:10px; margin:0 0 22px; padding:6px; width:max-content; max-width:100%; background:#e9eef6; border:1px solid var(--line); border-radius:14px; }
+.module-tab { background:transparent; color:var(--neutral); padding:11px 16px; }
+.module-tab.active { color:#fff; background:var(--primary); box-shadow:0 4px 12px rgba(23,78,166,.18); }
+.module-panel { min-width:0; }
+.preserve-banner { display:flex; gap:12px; align-items:flex-start; padding:14px 16px; border:1px solid #b8d4f5; border-radius:13px; background:#f0f6ff; color:#174a87; }
+.preserve-banner strong { white-space:nowrap; }
+.preserve-banner span { line-height:1.45; }
+.fill-table { min-width:1280px; }
+#fillDiagnostics { display:grid; gap:7px; color:var(--muted); }
+#fillDiagnostics strong { color:var(--ink); }
+.status.preencher { background:var(--info-bg); color:var(--info); }
+.status.correto { background:var(--ok-bg); color:var(--ok); }
+.status.naoencontrado, .status.somentepdf { background:var(--neutral-bg); color:var(--neutral); }
+tbody tr.row-preencher td { background:#f5f9ff; }
+tbody tr.row-trct td { background:#fff9e8; }
+tbody tr.row-naoencontrado td, tbody tr.row-duplicado td, tbody tr.row-verificar td, tbody tr.row-somentepdf td { background:#f7f8fa; }
+@media (max-width:620px) {
+  .module-tabs { width:100%; flex-direction:column; }
+  .module-tab { width:100%; text-align:left; }
+  .preserve-banner { flex-direction:column; }
+}

@@ -2,7 +2,7 @@ import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
 
 const $ = id => document.getElementById(id);
-const state = { excelFile:null, pdfFile:null, original:[], folha:[], results:[], diagnostics:{} };
+const state = { excelFile:null, pdfFile:null, original:[], folha:[], results:[], diagnostics:{}, fill:{excelFile:null,pdfFile:null,excel:null,pdf:null,rows:[],competence:''} };
 
 const STATUS = {
   OK:'OK', DIV:'DIVERGÊNCIA', CENT:'DIFERENÇA DE CENTAVOS', TRCT:'TRCT',
@@ -10,6 +10,17 @@ const STATUS = {
   DUP:'DUPLICADO', VER:'VERIFICAR'
 };
 const moneyFmt = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+
+function switchModule(mode){
+  const compare=mode==='compare';
+  $('compareModule').classList.toggle('hidden',!compare);
+  $('fillModule').classList.toggle('hidden',compare);
+  $('tabCompare').classList.toggle('active',compare);
+  $('tabFill').classList.toggle('active',!compare);
+}
+$('tabCompare').addEventListener('click',()=>switchModule('compare'));
+$('tabFill').addEventListener('click',()=>switchModule('fill'));
+
 
 function norm(v=''){
   return String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -119,11 +130,11 @@ async function parseExcel(file){
   return {records:out,sheetName:chosen.sheetName,headerRow:chosen.header.row+1};
 }
 
-async function pdfLines(file){
+async function pdfLines(file,onProgress=progress){
   const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
   const pages=[];
   for(let p=1;p<=pdf.numPages;p++){
-    progress(30+Math.round((p/pdf.numPages)*35),'Lendo PDF: página '+p+' de '+pdf.numPages+'...');
+    onProgress(30+Math.round((p/pdf.numPages)*35),'Lendo PDF: página '+p+' de '+pdf.numPages+'...');
     const page=await pdf.getPage(p), tc=await page.getTextContent();
     const items=tc.items.map(x=>({str:String(x.str||'').trim(),x:x.transform?.[4]||0,y:x.transform?.[5]||0})).filter(x=>x.str);
     items.sort((a,b)=>Math.abs(b.y-a.y)>2?b.y-a.y:a.x-b.x);
@@ -199,14 +210,333 @@ function parsePdfPage(lines,page){
   return records;
 }
 
-async function parsePdf(file){
-  const data=await pdfLines(file);
+async function parsePdf(file,onProgress=progress){
+  const data=await pdfLines(file,onProgress);
   let records=[];
   for(const pg of data.pages) records.push(...parsePdfPage(pg.lines,pg.page));
-  return {records,pages:data.numPages};
+  const flat=data.pages.flatMap(pg=>pg.lines);
+  const comp=(flat.join(' ').match(/\b(0[1-9]|1[0-2])\/20\d{2}\b/)||[])[0]||'';
+  return {records,pages:data.numPages,competence:comp};
 }
 
 function mapPush(map,key,obj){ if(!key)return; if(!map.has(key))map.set(key,[]); map.get(key).push(obj); }
+
+function fillMsg(text,type='success'){
+  const e=$('fillMessage'); e.textContent=text; e.className='message '+type;
+}
+function fillHideMsg(){ $('fillMessage').className='message hidden'; }
+function fillProgress(p,t){
+  $('fillProgressWrap').classList.remove('hidden');
+  $('fillProgressBar').style.width=p+'%';
+  $('fillProgressText').textContent=t;
+}
+function fillReady(){ $('fillAnalyzeBtn').disabled=!(state.fill.excelFile&&state.fill.pdfFile); }
+
+function setupFillDrop(inputId,dropId,statusId,key,validator){
+  const input=$(inputId), drop=$(dropId), status=$(statusId);
+  const set=file=>{
+    if(!file)return;
+    if(validator && !validator(file)){
+      fillMsg('Selecione um arquivo .xlsx válido para preservar a estrutura da planilha.','error');
+      input.value=''; return;
+    }
+    state.fill[key]=file;
+    status.textContent=file.name+' • '+(file.size/1024/1024).toFixed(2)+' MB';
+    fillReady(); fillHideMsg();
+  };
+  input.addEventListener('change',()=>set(input.files[0]));
+  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('dragover');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('dragover');}));
+  drop.addEventListener('drop',e=>set(e.dataTransfer.files[0]));
+}
+setupFillDrop('fillExcelFile','fillExcelDrop','fillExcelStatus','excelFile',f=>/\.xlsx$/i.test(f.name));
+setupFillDrop('fillPdfFile','fillPdfDrop','fillPdfStatus','pdfFile',f=>/\.pdf$/i.test(f.name)||f.type==='application/pdf');
+
+function colLetter(idx){
+  let n=idx+1,s='';
+  while(n){ const r=(n-1)%26; s=String.fromCharCode(65+r)+s; n=Math.floor((n-1)/26); }
+  return s;
+}
+function colIndexFromRef(ref=''){
+  const m=String(ref).match(/^([A-Z]+)/i); if(!m)return -1;
+  let n=0; for(const ch of m[1].toUpperCase()) n=n*26+(ch.charCodeAt(0)-64);
+  return n-1;
+}
+
+async function parseFillExcel(file){
+  if(!window.XLSX) throw new Error('Biblioteca de Excel não carregou. Recarregue a página com internet ativa.');
+  const buffer=await file.arrayBuffer();
+  const wb=XLSX.read(buffer,{type:'array',cellDates:true,cellStyles:true,cellFormula:true});
+  let chosen=null;
+  for(const sheetName of wb.SheetNames){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,raw:false,defval:''});
+    const header=detectHeader(rows);
+    if(header&&header.cols.net!==undefined&&(!chosen||header.score>chosen.header.score)) chosen={sheetName,rows,header};
+  }
+  if(!chosen) throw new Error('Não encontrei no Excel um cabeçalho com Nome, CPF e “Remuneração líquida a receber”.');
+  const c=chosen.header.cols, out=[];
+  for(let r=chosen.header.row+1;r<chosen.rows.length;r++){
+    const row=chosen.rows[r], rawName=String(row[c.name]??'').trim();
+    if(!rawName||norm(rawName)==='VALOR TOTAL') continue;
+    const nameNorm=normName(rawName); if(!nameNorm)continue;
+    const ccpf=c.cpf!==undefined?cpf(row[c.cpf]):'';
+    const obs=c.obs!==undefined?String(row[c.obs]??'').trim():'';
+    out.push({
+      row:r+1, rawName, nameNorm, cpf:ccpf, obs,
+      currentNet:money(row[c.net]),
+      isTRCT:hasTrct(rawName,obs),
+      cell:colLetter(c.net)+(r+1)
+    });
+  }
+  return {
+    records:out, sheetName:chosen.sheetName, headerRow:chosen.header.row+1,
+    netColIndex:c.net, netColLetter:colLetter(c.net), buffer
+  };
+}
+
+function fillStatusClass(s){
+  if(s==='PREENCHER')return'preencher';
+  if(s==='JÁ CORRETO')return'correto';
+  if(s==='TRCT')return'trct';
+  if(s==='NÃO ENCONTRADO')return'naoencontrado';
+  if(s==='SOMENTE NO PDF')return'somentepdf';
+  if(s==='DUPLICADO')return'duplicado';
+  return'verificar';
+}
+
+function prepareFillRows(excelRecords,pdfRecords){
+  const cp=new Map(),nm=new Map();
+  pdfRecords.forEach(f=>{mapPush(cp,f.cpf,f);mapPush(nm,f.nameNorm,f);});
+  const excelCpfCount=new Map();
+  excelRecords.forEach(e=>{if(e.cpf)excelCpfCount.set(e.cpf,(excelCpfCount.get(e.cpf)||0)+1);});
+  const used=new Set(), out=[];
+  for(const e of excelRecords){
+    if(e.cpf && (excelCpfCount.get(e.cpf)||0)>1){
+      out.push({...e,status:'DUPLICADO',pdfNet:null,trctNet:null,target:null,rule:'CPF duplicado no Excel',pdfPage:''});
+      continue;
+    }
+    let matches=[],matchKey='';
+    if(e.cpf&&cp.has(e.cpf)){matches=cp.get(e.cpf);matchKey='CPF';}
+    else if(e.nameNorm&&nm.has(e.nameNorm)){matches=nm.get(e.nameNorm);matchKey='NOME';}
+    if(matches.length>1){
+      out.push({...e,status:'DUPLICADO',pdfNet:null,trctNet:null,target:null,rule:'Mais de um registro no PDF para a mesma chave',pdfPage:''});
+      continue;
+    }
+    if(!matches.length){
+      out.push({...e,status:'NÃO ENCONTRADO',pdfNet:null,trctNet:null,target:null,rule:'Colaborador não localizado no PDF',pdfPage:''});
+      continue;
+    }
+    const f=matches[0];
+    if(used.has(f)){
+      out.push({...e,status:'DUPLICADO',pdfNet:f.net,trctNet:f.trctValue,target:null,rule:'Registro do PDF já associado a outro colaborador',pdfPage:f.page});
+      continue;
+    }
+    used.add(f);
+    const isTrct=e.isTRCT||f.isTRCT||f.trctValue!==null;
+    const target=isTrct && f.trctValue!==null ? f.trctValue : f.net;
+    if(target===null){
+      out.push({...e,status:'VERIFICAR',pdfNet:f.net,trctNet:f.trctValue,target:null,rule:'Não foi possível identificar o valor líquido',pdfPage:f.page,matchKey});
+      continue;
+    }
+    const equal=e.currentNet!==null&&Math.abs(e.currentNet-target)<=0.005;
+    const status=isTrct?'TRCT':(equal?'JÁ CORRETO':'PREENCHER');
+    out.push({...e,status,pdfNet:f.net,trctNet:f.trctValue,target,
+      rule:isTrct&&f.trctValue!==null?'Líquido da rescisão / TRCT':'Líquido mensal',
+      pdfPage:f.page,matchKey});
+  }
+  for(const f of pdfRecords){
+    if(!used.has(f)){
+      out.push({row:'',cell:'',rawName:f.rawName,nameNorm:f.nameNorm,cpf:f.cpf,currentNet:null,isTRCT:f.isTRCT,
+        status:'SOMENTE NO PDF',pdfNet:f.net,trctNet:f.trctValue,target:null,rule:'Existe no PDF, mas não foi localizado no Excel',pdfPage:f.page,matchKey:''});
+    }
+  }
+  return out;
+}
+
+function renderFill(){
+  const rows=state.fill.rows;
+  const count=s=>rows.filter(r=>r.status===s).length;
+  const writeable=rows.filter(r=>Number.isFinite(r.target)&&r.row);
+  const unresolved=rows.filter(r=>['NÃO ENCONTRADO','DUPLICADO','VERIFICAR','SOMENTE NO PDF'].includes(r.status));
+  const changes=writeable.filter(r=>r.currentNet===null||Math.abs(r.currentNet-r.target)>0.005);
+  $('fillSummaryCards').innerHTML=[
+    ['Colaboradores no Excel',state.fill.excel?.records.length||0,'info'],
+    ['Valores identificados',writeable.length,'good'],
+    ['Alterações necessárias',changes.length,changes.length?'info':'good'],
+    ['TRCT / rescisões',count('TRCT'),'warn'],
+    ['Já corretos',count('JÁ CORRETO'),'good'],
+    ['Pendências',unresolved.length,unresolved.length?'bad':'good'],
+    ['Colaboradores no PDF',state.fill.pdf?.records.length||0,'info'],
+    ['Competência',state.fill.competence||'—','info']
+  ].map(([l,v,c])=>'<div class="metric '+c+'"><span class="label">'+esc(l)+'</span><span class="value">'+esc(v)+'</span></div>').join('');
+
+  const alert=$('fillAlert');
+  alert.classList.remove('hidden','has-div','no-div','no-data');
+  if(unresolved.length){
+    alert.classList.add('has-div');
+    alert.innerHTML='⚠ Há <strong>'+unresolved.length+'</strong> registro(s) que exigem conferência.'+
+      '<span class="sub">O Excel ainda pode ser gerado; somente registros com correspondência segura e valor identificado serão preenchidos. Pendências permanecem intactas.</span>';
+  }else{
+    alert.classList.add('no-div');
+    alert.innerHTML='✓ Todos os registros do Excel possuem correspondência segura no PDF.'+
+      '<span class="sub">Confira a tabela abaixo e gere a nova cópia quando estiver de acordo.</span>';
+  }
+  $('fillGenerateBtn').disabled=writeable.length===0;
+  renderFillPreview();
+  $('fillDiagnostics').innerHTML=
+    '<div><strong>Excel:</strong> aba “'+esc(state.fill.excel?.sheetName||'')+'”, cabeçalho na linha '+(state.fill.excel?.headerRow||'—')+', coluna de destino <strong>'+esc(state.fill.excel?.netColLetter||'—')+'</strong>.</div>'+
+    '<div><strong>PDF:</strong> '+(state.fill.pdf?.pages||0)+' páginas, '+(state.fill.pdf?.records.length||0)+' colaboradores identificados.</div>'+
+    '<div><strong>Chave:</strong> CPF primeiro; nome normalizado apenas como alternativa.</div>'+
+    '<div><strong>TRCT:</strong> quando existe rubrica “Líquido Rescisão”, ela substitui o líquido mensal para o valor a gravar.</div>'+
+    '<div><strong>Saída:</strong> o pacote .xlsx original é preservado; apenas as células de destino são atualizadas.</div>';
+}
+
+function renderFillPreview(){
+  const q=norm($('fillSearchInput').value), sf=$('fillStatusFilter').value;
+  const rows=state.fill.rows.filter(r=>(sf==='ALL'||r.status===sf)&&(!q||norm((r.rawName||'')+' '+(r.cpf||'')).includes(q)));
+  $('fillPreviewCount').textContent=rows.length+' de '+state.fill.rows.length+' registros exibidos';
+  $('fillPreviewBody').innerHTML=rows.map(r=>'<tr class="row-'+fillStatusClass(r.status)+'">'+
+    '<td><span class="status '+fillStatusClass(r.status)+'">'+esc(r.status)+'</span></td>'+
+    '<td>'+esc(fmtCpf(r.cpf))+'</td><td>'+esc(r.rawName||'—')+'</td>'+
+    '<td class="money">'+(r.currentNet===null?'—':moneyFmt.format(r.currentNet))+'</td>'+
+    '<td class="money">'+(r.pdfNet===null?'—':moneyFmt.format(r.pdfNet))+'</td>'+
+    '<td class="money">'+(r.trctNet===null?'—':moneyFmt.format(r.trctNet))+'</td>'+
+    '<td class="money"><strong>'+(r.target===null?'—':moneyFmt.format(r.target))+'</strong></td>'+
+    '<td>'+esc(r.rule||'—')+'</td><td>'+esc(r.cell||'—')+'</td></tr>').join('');
+}
+
+async function runFill(){
+  fillHideMsg();
+  ['fillSummarySection','fillPreviewSection','fillDiagnosticsSection'].forEach(id=>$(id).classList.add('hidden'));
+  $('fillAnalyzeBtn').disabled=true;
+  try{
+    fillProgress(5,'Lendo estrutura do Excel...');
+    const ex=await parseFillExcel(state.fill.excelFile);
+    fillProgress(22,'Excel identificado. Lendo PDF...');
+    const pf=await parsePdf(state.fill.pdfFile,(p,t)=>fillProgress(Math.max(25,p),t));
+    fillProgress(78,'Relacionando CPF, nomes e líquidos...');
+    state.fill.excel=ex; state.fill.pdf=pf; state.fill.competence=pf.competence||'';
+    state.fill.rows=prepareFillRows(ex.records,pf.records);
+    renderFill();
+    ['fillSummarySection','fillPreviewSection','fillDiagnosticsSection'].forEach(id=>$(id).classList.remove('hidden'));
+    fillProgress(100,'Conferência pronta.');
+    setTimeout(()=>$('fillProgressWrap').classList.add('hidden'),500);
+    fillMsg('Análise concluída. Confira os valores antes de gerar o Excel preenchido.');
+  }catch(e){
+    console.error(e); $('fillProgressWrap').classList.add('hidden');
+    fillMsg(e?.message||'Erro ao preparar o preenchimento.','error');
+  }finally{ fillReady(); }
+}
+
+function findXmlByLocalName(root,name){ return Array.from(root.getElementsByTagName('*')).find(x=>x.localName===name)||null; }
+function findAllXmlByLocalName(root,name){ return Array.from(root.getElementsByTagName('*')).filter(x=>x.localName===name); }
+
+async function patchXlsxNetValues(file,sheetName,updates){
+  if(!window.JSZip) throw new Error('Biblioteca de preservação do Excel não carregou. Recarregue a página com internet ativa.');
+  const zip=await JSZip.loadAsync(await file.arrayBuffer());
+  const wbEntry=zip.file('xl/workbook.xml'), relEntry=zip.file('xl/_rels/workbook.xml.rels');
+  if(!wbEntry||!relEntry) throw new Error('Estrutura interna do .xlsx não reconhecida.');
+  const parser=new DOMParser();
+  const wbDoc=parser.parseFromString(await wbEntry.async('text'),'application/xml');
+  const relDoc=parser.parseFromString(await relEntry.async('text'),'application/xml');
+  if(wbDoc.querySelector('parsererror')||relDoc.querySelector('parsererror')) throw new Error('Não foi possível ler a estrutura interna do Excel.');
+
+  const sheetEl=findAllXmlByLocalName(wbDoc,'sheet').find(x=>x.getAttribute('name')===sheetName);
+  if(!sheetEl) throw new Error('A aba de destino não foi encontrada no arquivo.');
+  const rid=sheetEl.getAttribute('r:id')||sheetEl.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
+  const rel=findAllXmlByLocalName(relDoc,'Relationship').find(x=>x.getAttribute('Id')===rid);
+  if(!rel) throw new Error('Não foi possível localizar o XML da aba de destino.');
+  let target=rel.getAttribute('Target')||'';
+  target=target.replace(/^\//,'');
+  if(!target.startsWith('xl/')) target='xl/'+target.replace(/^\.\//,'').replace(/^\.\.\//,'');
+  const sheetEntry=zip.file(target);
+  if(!sheetEntry) throw new Error('Arquivo interno da aba não encontrado: '+target);
+
+  const sheetDoc=parser.parseFromString(await sheetEntry.async('text'),'application/xml');
+  if(sheetDoc.querySelector('parsererror')) throw new Error('Não foi possível interpretar a aba do Excel.');
+  const sheetData=findXmlByLocalName(sheetDoc,'sheetData');
+  if(!sheetData) throw new Error('Área de dados da aba não encontrada.');
+  const ns=sheetDoc.documentElement.namespaceURI||'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+
+  for(const u of updates){
+    const ref=u.cell;
+    let rowEl=findAllXmlByLocalName(sheetData,'row').find(x=>Number(x.getAttribute('r'))===Number(u.row));
+    if(!rowEl){
+      rowEl=sheetDoc.createElementNS(ns,'row'); rowEl.setAttribute('r',String(u.row));
+      const rows=findAllXmlByLocalName(sheetData,'row');
+      const next=rows.find(x=>Number(x.getAttribute('r'))>Number(u.row));
+      if(next)sheetData.insertBefore(rowEl,next); else sheetData.appendChild(rowEl);
+    }
+    let cell=findAllXmlByLocalName(rowEl,'c').find(x=>x.getAttribute('r')===ref);
+    if(!cell){
+      cell=sheetDoc.createElementNS(ns,'c'); cell.setAttribute('r',ref);
+      const targetCol=colIndexFromRef(ref);
+      const cells=findAllXmlByLocalName(rowEl,'c');
+      const next=cells.find(x=>colIndexFromRef(x.getAttribute('r'))>targetCol);
+      if(next)rowEl.insertBefore(cell,next); else rowEl.appendChild(cell);
+    }
+    cell.removeAttribute('t');
+    for(const child of [...cell.children]){
+      if(['f','v','is'].includes(child.localName)) cell.removeChild(child);
+    }
+    const v=sheetDoc.createElementNS(ns,'v');
+    v.textContent=String(Number(u.target));
+    cell.appendChild(v);
+  }
+  zip.file(target,new XMLSerializer().serializeToString(sheetDoc));
+  return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'});
+}
+
+function downloadBlob(blob,name){
+  const a=document.createElement('a'),url=URL.createObjectURL(blob);
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1200);
+}
+
+async function generateFilledExcel(){
+  try{
+    const updates=state.fill.rows.filter(r=>Number.isFinite(r.target)&&r.row&&r.cell);
+    if(!updates.length) throw new Error('Não há valores seguros para preencher.');
+    $('fillGenerateBtn').disabled=true;
+    fillProgress(10,'Preservando estrutura do Excel e atualizando líquidos...');
+    const blob=await patchXlsxNetValues(state.fill.excelFile,state.fill.excel.sheetName,updates);
+    fillProgress(95,'Preparando arquivo final...');
+    const base=state.fill.excelFile.name.replace(/\.xlsx$/i,'');
+    const comp=state.fill.competence?'_'+state.fill.competence.replace('/','-'):'';
+    downloadBlob(blob,base+comp+'_PREENCHIDO.xlsx');
+    fillProgress(100,'Arquivo gerado.');
+    setTimeout(()=>$('fillProgressWrap').classList.add('hidden'),500);
+    fillMsg('Excel preenchido gerado com sucesso. O arquivo original permaneceu intacto.');
+  }catch(e){
+    console.error(e); $('fillProgressWrap').classList.add('hidden');
+    fillMsg(e?.message||'Erro ao gerar o Excel preenchido.','error');
+  }finally{ $('fillGenerateBtn').disabled=false; }
+}
+
+function exportFillAudit(){
+  if(!state.fill.rows.length){fillMsg('Faça a análise antes de exportar a conferência.','error');return;}
+  const rows=state.fill.rows.map(r=>({
+    Status:r.status,CPF:fmtCpf(r.cpf),Nome:r.rawName,'Valor atual Excel':r.currentNet,
+    'Líquido mensal PDF':r.pdfNet,'Líquido TRCT':r.trctNet,'Valor a gravar':r.target,
+    'Regra aplicada':r.rule,'Célula destino':r.cell,'Linha Excel':r.row,'Página PDF':r.pdfPage,'Chave usada':r.matchKey||''
+  }));
+  const out=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows);
+  ws['!cols']=[18,16,38,18,18,18,18,30,14,12,12,14].map(wch=>({wch}));
+  XLSX.utils.book_append_sheet(out,ws,'Conferência');
+  const comp=state.fill.competence?'_'+state.fill.competence.replace('/','-'):'';
+  XLSX.writeFile(out,'Conferencia_Preenchimento_Liquido'+comp+'.xlsx');
+}
+
+function resetFill(){
+  state.fill={excelFile:null,pdfFile:null,excel:null,pdf:null,rows:[],competence:''};
+  $('fillExcelFile').value=''; $('fillPdfFile').value='';
+  $('fillExcelStatus').textContent='Nenhum arquivo selecionado.';
+  $('fillPdfStatus').textContent='Nenhum arquivo selecionado.';
+  ['fillSummarySection','fillPreviewSection','fillDiagnosticsSection'].forEach(id=>$(id).classList.add('hidden'));
+  fillHideMsg(); $('fillProgressWrap').classList.add('hidden'); fillReady();
+}
+
+
 function result(o,f,status,matchKey,diff){
   return {status,cpf:o?.cpf||f?.cpf||'',name:o?.rawName||f?.rawName||'',type:o?.type||f?.type||'',obs:o?.obs||'',
     originalNet:o?.net??null,folhaNet:f?.net??null,trctNet:f?.trctValue??null,diff,matchKey,originalRow:o?.row??'',pdfPage:f?.page??''};
@@ -405,3 +735,10 @@ $('divergenceOnlyBtn').addEventListener('click',()=>{
     '<td class="money">'+(r.trctNet===null?'—':moneyFmt.format(r.trctNet))+'</td>'+
     '<td class="money">'+(r.diff===null?'—':moneyFmt.format(r.diff))+'</td><td>'+esc(r.matchKey||'—')+'</td></tr>').join('');
 });
+
+$('fillAnalyzeBtn').addEventListener('click',runFill);
+$('fillResetBtn').addEventListener('click',resetFill);
+$('fillGenerateBtn').addEventListener('click',generateFilledExcel);
+$('fillAuditBtn').addEventListener('click',exportFillAudit);
+$('fillSearchInput').addEventListener('input',renderFillPreview);
+$('fillStatusFilter').addEventListener('change',renderFillPreview);

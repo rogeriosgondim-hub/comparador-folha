@@ -1,6 +1,6 @@
-# Comparador de Folha de Pagamento
+# Folha de Pagamento — Comparador e Preenchimento
 
-Aplicação web estática para comparar um **Excel original** com um **PDF de folha de pagamento** diretamente no navegador.
+Aplicação web estática com duas funções: comparar um **Excel original** com um **PDF de folha de pagamento** e preencher automaticamente a coluna **Remuneração líquida a receber** no Excel a partir do PDF.
 
 ## Privacidade
 
@@ -22,6 +22,12 @@ Aplicação web estática para comparar um **Excel original** com um **PDF de fo
 - Painel de resumo.
 - Filtros de resultado.
 - Exportação das divergências para Excel.
+- Módulo de preenchimento automático do líquido no .xlsx.
+- CPF como chave principal para o preenchimento; nome normalizado como alternativa.
+- Regra específica para TRCT/rescisões, priorizando a rubrica de líquido da rescisão.
+- Tela de conferência antes de gerar o arquivo final.
+- Exportação da trilha de conferência.
+- Preservação do pacote .xlsx: o módulo altera apenas as células de líquido identificadas.
 
 ## Estrutura
 
