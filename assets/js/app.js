@@ -254,17 +254,30 @@ function renderSummary(){
   const metrics=[
     ['Total original',moneyFmt.format(originalTotal),'info'],['Total folha (mensal)',moneyFmt.format(folhaTotal),'info'],
     ['Total TRCT extraído',moneyFmt.format(trctTotal),'warn'],['Diferença efetiva',moneyFmt.format(eff),Math.abs(eff)<=Number($('tolerance').value||.01)?'good':'bad'],
-    ['Colaboradores OK',count(STATUS.OK),'good'],['Divergências',count(STATUS.DIV)+count(STATUS.CENT),'bad'],
+    ['Colaboradores OK',count(STATUS.OK),'good'],['Divergências de líquido',count(STATUS.DIV)+count(STATUS.CENT),(count(STATUS.DIV)+count(STATUS.CENT))>0?'critical':'good'],
     ['Ausentes',count(STATUS.SO_ORIG)+count(STATUS.SO_FOLHA),'warn'],['Pendentes / duplicados',count(STATUS.VER)+count(STATUS.DUP),'warn'],
     ['TRCT / rescisões',count(STATUS.TRCT),'warn'],['Novos colaboradores',count(STATUS.NOVO),'info']
   ];
   $('summaryCards').innerHTML=metrics.map(([l,v,c])=>'<div class="metric '+c+'"><span class="label">'+esc(l)+'</span><span class="value">'+esc(v)+'</span></div>').join('');
+  const divCount=count(STATUS.DIV)+count(STATUS.CENT);
+  const centsCount=count(STATUS.CENT);
+  const alert=$('resultAlert');
+  alert.classList.remove('hidden','has-div','no-div');
+  if(divCount>0){
+    alert.classList.add('has-div');
+    alert.innerHTML='⚠ Foram encontradas <strong>'+divCount+'</strong> divergência(s) de líquido.'+
+      '<span class="sub">'+centsCount+' classificada(s) como diferença de centavos. Use “Mostrar só divergências” para revisar apenas esses casos.</span>';
+  }else{
+    alert.classList.add('no-div');
+    alert.innerHTML='✓ Nenhuma divergência de líquido encontrada dentro dos critérios atuais.'+
+      '<span class="sub">TRCT, novos colaboradores, ausências, duplicidades e itens “Verificar” continuam sendo mostrados separadamente.</span>';
+  }
 }
 function renderResults(){
   const q=norm($('searchInput').value), sf=$('statusFilter').value;
   const rows=state.results.filter(r=>(sf==='ALL'||r.status===sf)&&(!q||norm(r.name+' '+r.cpf).includes(q)));
   $('resultCount').textContent=rows.length+' de '+state.results.length+' registros exibidos';
-  $('resultsBody').innerHTML=rows.map(r=>'<tr>'+
+  $('resultsBody').innerHTML=rows.map(r=>'<tr class="row-'+statusClass(r.status)+'">'+
     '<td><span class="status '+statusClass(r.status)+'">'+esc(r.status)+'</span></td>'+
     '<td>'+esc(fmtCpf(r.cpf))+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.type||'—')+'</td><td>'+esc(r.obs||'—')+'</td>'+
     '<td class="money">'+(r.originalNet===null?'—':moneyFmt.format(r.originalNet))+'</td>'+
@@ -280,12 +293,15 @@ function renderDiag(){
   '<div><strong>TRCT:</strong> rescisões são tratadas separadamente do líquido mensal.</div>';
 }
 function exportXlsx(){
-  const keep=new Set([STATUS.DIV,STATUS.CENT,STATUS.TRCT,STATUS.NOVO,STATUS.SO_ORIG,STATUS.SO_FOLHA,STATUS.DUP,STATUS.VER]);
-  const rows=state.results.filter(r=>keep.has(r.status)).map(r=>({
+  const rows=state.results.filter(r=>r.status===STATUS.DIV||r.status===STATUS.CENT).map(r=>({
     Status:r.status,CPF:fmtCpf(r.cpf),Nome:r.name,'Vínculo / Tipo':r.type,'Observação original':r.obs,
     'Líquido original':r.originalNet,'Líquido folha':r.folhaNet,'TRCT folha':r.trctNet,'Diferença':r.diff,
     'Chave usada':r.matchKey,'Linha Excel':r.originalRow,'Página PDF':r.pdfPage
   }));
+  if(!rows.length){
+    msg('Não há divergências de líquido para exportar.','success');
+    return;
+  }
   const wb=XLSX.utils.book_new(), ws=XLSX.utils.json_to_sheet(rows);
   ws['!cols']=[18,16,38,22,28,16,16,16,16,20,12,12].map(wch=>({wch}));
   XLSX.utils.book_append_sheet(wb,ws,'Divergências');
@@ -321,3 +337,17 @@ $('resetBtn').addEventListener('click',reset);
 $('exportBtn').addEventListener('click',exportXlsx);
 $('searchInput').addEventListener('input',renderResults);
 $('statusFilter').addEventListener('change',renderResults);
+$('divergenceOnlyBtn').addEventListener('click',()=>{
+  $('statusFilter').value='ALL';
+  const only=state.results.filter(r=>r.status===STATUS.DIV||r.status===STATUS.CENT);
+  const q=norm($('searchInput').value);
+  const rows=only.filter(r=>!q||norm(r.name+' '+r.cpf).includes(q));
+  $('resultCount').textContent=rows.length+' divergência(s) de líquido exibida(s)';
+  $('resultsBody').innerHTML=rows.map(r=>'<tr class="row-'+statusClass(r.status)+'">'+
+    '<td><span class="status '+statusClass(r.status)+'">'+esc(r.status)+'</span></td>'+
+    '<td>'+esc(fmtCpf(r.cpf))+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.type||'—')+'</td><td>'+esc(r.obs||'—')+'</td>'+
+    '<td class="money">'+(r.originalNet===null?'—':moneyFmt.format(r.originalNet))+'</td>'+
+    '<td class="money">'+(r.folhaNet===null?'—':moneyFmt.format(r.folhaNet))+'</td>'+
+    '<td class="money">'+(r.trctNet===null?'—':moneyFmt.format(r.trctNet))+'</td>'+
+    '<td class="money">'+(r.diff===null?'—':moneyFmt.format(r.diff))+'</td><td>'+esc(r.matchKey||'—')+'</td></tr>').join('');
+});
