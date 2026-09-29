@@ -71,14 +71,42 @@
         </div>
         <button id="exportBtn" class="primary">Exportar divergências para Excel</button>
       </div>
+      <div id="approvalStatus" class="approval-status hidden"></div>
       <div id="resultAlert" class="result-alert hidden"></div>
       <div id="summaryCards" class="summary-grid"></div>
+    </section>
+
+    <section id="pendingSection" class="card hidden">
+      <div class="section-heading table-heading">
+        <div>
+          <p class="eyebrow">Ação necessária</p>
+          <h2>3. Pendências para conferência</h2>
+          <p id="pendingCount"></p>
+        </div>
+      </div>
+      <div id="pendingEmpty" class="pending-empty hidden">Nenhuma pendência de conferência encontrada.</div>
+      <div id="pendingWrap" class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>CPF</th>
+              <th>Nome</th>
+              <th>Líquido original</th>
+              <th>Líquido folha</th>
+              <th>Diferença</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody id="pendingBody"></tbody>
+        </table>
+      </div>
     </section>
 
     <section id="resultsSection" class="card hidden">
       <div class="section-heading table-heading">
         <div>
-          <h2>3. Resultado detalhado</h2>
+          <h2>4. Resultado detalhado</h2>
           <p id="resultCount"></p>
         </div>
         <div class="filters">
