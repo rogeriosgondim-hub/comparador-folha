@@ -92,3 +92,17 @@ footer { text-align:center; color:var(--muted); padding:0 20px 30px; font-size:.
   .card { padding:16px; }
   .filters, .filters input, .filters select { width:100%; min-width:0; }
 }
+
+.result-alert { margin:0 0 14px; padding:15px 18px; border-radius:14px; font-weight:800; border:1px solid transparent; }
+.result-alert.has-div { background:var(--danger-bg); color:var(--danger); border-color:#f3b7b1; }
+.result-alert.no-div { background:var(--ok-bg); color:var(--ok); border-color:#b9e7ca; }
+.result-alert .sub { display:block; margin-top:4px; font-weight:650; font-size:.9rem; }
+tbody tr.row-divergencia td { background:#fff2f0; }
+tbody tr.row-centavos td { background:#fff9e8; }
+tbody tr.row-verificar td, tbody tr.row-duplicado td, tbody tr.row-ausente td { background:#f7f8fa; }
+tbody tr.row-divergencia td:first-child { border-left:5px solid var(--danger); }
+tbody tr.row-centavos td:first-child { border-left:5px solid #e5a900; }
+tbody tr.row-divergencia:hover td { background:#ffe9e6; }
+tbody tr.row-centavos:hover td { background:#fff3cc; }
+.metric.critical { border:2px solid var(--danger); background:var(--danger-bg); }
+.metric.critical .label, .metric.critical .value { color:var(--danger); }
