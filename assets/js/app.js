@@ -10,6 +10,7 @@ const STATUS = {
   DUP:'DUPLICADO', VER:'VERIFICAR'
 };
 const moneyFmt = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+const HISTORY_KEY = 'comparadorFolhaHistoricoV1';
 
 function switchModule(mode){
   const compare=mode==='compare';
@@ -584,6 +585,69 @@ function pendingReason(r){
   if(r.status===STATUS.VER) return 'Faltam dados suficientes para validar o registro automaticamente.';
   return '';
 }
+function comparisonSnapshot(competence=''){
+  const r=state.results;
+  const actionable=actionableStatuses();
+  const pend=r.filter(x=>actionable.has(x.status));
+  const comparable=r.filter(x=>Number.isFinite(x.originalNet)&&Number.isFinite(x.folhaNet)&&x.status!==STATUS.TRCT);
+  const hasAnyOriginalValue=r.some(x=>Number.isFinite(x.originalNet));
+  const validOriginal=r.filter(x=>x.status!==STATUS.SO_FOLHA&&Number.isFinite(x.originalNet));
+  const total=(arr,key)=>arr.reduce((a,x)=>a+(Number.isFinite(x[key])?x[key]:0),0);
+  const originalTotal=total(validOriginal,'originalNet');
+  const folhaTotal=total(r.filter(x=>x.status!==STATUS.SO_ORIG),'folhaNet');
+  const eff=comparable.reduce((a,x)=>a+(Number.isFinite(x.diff)?x.diff:0),0);
+  let status='Folha aprovada',statusClassName='approved';
+  if(!hasAnyOriginalValue||!comparable.length){ status='Validação parcial';statusClassName='partial'; }
+  else if(pend.length){ status='Requer conferência';statusClassName='review'; }
+  return {
+    competence:competence||'Não identificada',
+    status,statusClassName,
+    collaborators:r.length,
+    ok:r.filter(x=>x.status===STATUS.OK).length,
+    divergences:r.filter(x=>x.status===STATUS.DIV||x.status===STATUS.CENT).length,
+    pending:pend.length,
+    trct:r.filter(x=>x.status===STATUS.TRCT).length,
+    newEmployees:r.filter(x=>x.status===STATUS.NOVO).length,
+    originalTotal:validOriginal.length?originalTotal:null,
+    folhaTotal,
+    effectiveDifference:comparable.length?eff:null,
+    processedAt:new Date().toISOString()
+  };
+}
+function getHistory(){
+  try{
+    const raw=localStorage.getItem(HISTORY_KEY);
+    const data=raw?JSON.parse(raw):[];
+    return Array.isArray(data)?data:[];
+  }catch{return[];}
+}
+function setHistory(items){
+  localStorage.setItem(HISTORY_KEY,JSON.stringify(items.slice(0,24)));
+}
+function saveHistory(competence){
+  const item=comparisonSnapshot(competence);
+  let items=getHistory();
+  if(item.competence!=='Não identificada') items=items.filter(x=>x.competence!==item.competence);
+  items.unshift(item);
+  setHistory(items);
+  renderHistory();
+}
+function renderHistory(){
+  const items=getHistory();
+  const body=$('historyBody'), empty=$('historyEmpty'), wrap=$('historyWrap');
+  if(!body||!empty||!wrap)return;
+  empty.classList.toggle('hidden',items.length>0);
+  wrap.classList.toggle('hidden',items.length===0);
+  body.innerHTML=items.map(x=>'<tr>'+
+    '<td><strong>'+esc(x.competence)+'</strong></td>'+
+    '<td><span class="history-status '+esc(x.statusClassName||'partial')+'">'+esc(x.status)+'</span></td>'+
+    '<td>'+esc(x.collaborators)+'</td><td>'+esc(x.ok)+'</td><td>'+esc(x.divergences)+'</td><td>'+esc(x.pending)+'</td>'+
+    '<td>'+esc(x.trct)+'</td><td>'+esc(x.newEmployees)+'</td>'+
+    '<td class="money">'+(x.originalTotal===null?'N/D':moneyFmt.format(x.originalTotal))+'</td>'+
+    '<td class="money">'+moneyFmt.format(Number(x.folhaTotal||0))+'</td>'+
+    '<td class="money">'+(x.effectiveDifference===null?'N/D':moneyFmt.format(x.effectiveDifference))+'</td>'+
+    '<td>'+esc(new Date(x.processedAt).toLocaleString('pt-BR'))+'</td></tr>').join('');
+}
 function renderApprovalStatus(){
   const actionable=actionableStatuses();
   const pend=state.results.filter(r=>actionable.has(r.status));
@@ -705,6 +769,7 @@ async function run(){
     state.results=compare(state.original,state.folha,tol,cents);
     state.diagnostics={sheetName:ex.sheetName,headerRow:ex.headerRow,originalCount:ex.records.length,pdfPages:pf.pages,folhaCount:pf.records.length};
     renderSummary(); renderApprovalStatus(); renderPending(); renderResults(); renderDiag();
+    saveHistory(pf.competence);
     $('summarySection').classList.remove('hidden'); $('pendingSection').classList.remove('hidden'); $('resultsSection').classList.remove('hidden'); $('diagnosticsSection').classList.remove('hidden');
     progress(100,'Concluído.'); setTimeout(()=>$('progressWrap').classList.add('hidden'),500);
     msg('Comparação concluída: '+state.original.length+' registros no Excel e '+state.folha.length+' colaboradores identificados no PDF.');
@@ -721,6 +786,15 @@ $('resetBtn').addEventListener('click',reset);
 $('exportBtn').addEventListener('click',exportXlsx);
 $('searchInput').addEventListener('input',renderResults);
 $('statusFilter').addEventListener('change',renderResults);
+$('clearHistoryBtn').addEventListener('click',()=>{
+  if(confirm('Deseja apagar o histórico resumido salvo neste navegador?')){
+    localStorage.removeItem(HISTORY_KEY);
+    renderHistory();
+    msg('Histórico local apagado. Os arquivos de folha nunca foram armazenados.','success');
+  }
+});
+renderHistory();
+
 $('divergenceOnlyBtn').addEventListener('click',()=>{
   $('statusFilter').value='ALL';
   const only=state.results.filter(r=>r.status===STATUS.DIV||r.status===STATUS.CENT);
