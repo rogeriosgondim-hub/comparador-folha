@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Controle operacional de férias com leitura local do Excel e conciliação com PDF da contabilidade." />
+  <title>Férias — Portal de Folha Nomus</title>
+  <link rel="stylesheet" href="assets/css/styles.css" />
+  <link rel="stylesheet" href="assets/css/portal.css" />
+  <link rel="stylesheet" href="assets/css/ferias.css" />
+</head>
+<body class="portal-body vacation-page">
+  <header class="topbar portal-topbar">
+    <div>
+      <p class="eyebrow">Portal de Folha • controle operacional</p>
+      <h1>Férias</h1>
+      <p class="subtitle">Saldos, programação, calendário e conciliação Excel × PDF, com processamento local no navegador.</p>
+    </div>
+    <div class="header-actions"><a class="secondary back-link" href="index.html">← Voltar ao Portal</a><div class="privacy-badge">🔒 Arquivos não são enviados</div></div>
+  </header>
+
+  <main class="container vacation-container">
+    <nav class="vacation-tabs" aria-label="Áreas de férias">
+      <button class="vacation-tab active" data-view="overview" type="button">Visão geral</button>
+      <button class="vacation-tab" data-view="balances" type="button">Saldos</button>
+      <button class="vacation-tab" data-view="schedules" type="button">Programação</button>
+      <button class="vacation-tab" data-view="calendar" type="button">Calendário</button>
+      <button class="vacation-tab" data-view="reconciliation" type="button">Conciliação</button>
+    </nav>
+
+    <section class="card vacation-import">
+      <div>
+        <p class="eyebrow">Atualização mensal</p>
+        <h2>Importar controle e relatório oficial</h2>
+        <p>Use a planilha integrada de férias e, quando disponível, o PDF de Programação de Férias da contabilidade.</p>
+      </div>
+      <div class="upload-grid">
+        <label class="dropzone"><span class="drop-icon">📗</span><strong>Controle de férias</strong><span>.xlsx</span><input id="vacExcel" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /><small id="vacExcelStatus">Nenhum arquivo selecionado.</small></label>
+        <label class="dropzone"><span class="drop-icon">📄</span><strong>PDF da contabilidade</strong><span>Programação de Férias</span><input id="vacPdf" type="file" accept="application/pdf,.pdf" /><small id="vacPdfStatus">Nenhum arquivo selecionado.</small></label>
+      </div>
+      <div id="vacMessage" class="message hidden" role="status"></div>
+    </section>
+
+    <section id="overview" class="vac-view">
+      <div class="vac-kpis">
+        <article class="vac-kpi"><span>Colaboradores</span><strong id="kEmployees">—</strong><small>cadastro interno</small></article>
+        <article class="vac-kpi"><span>Urgentes / atrasados</span><strong id="kUrgent">—</strong><small>saldo com alerta</small></article>
+        <article class="vac-kpi"><span>Programações futuras</span><strong id="kUpcoming">—</strong><small>não realizadas</small></article>
+        <article class="vac-kpi"><span>Divergências</span><strong id="kDivergent">—</strong><small>na conciliação</small></article>
+        <article class="vac-kpi"><span>Empregados no PDF</span><strong id="kPdfEmployees">—</strong><small id="kPdfBaseDate">PDF não carregado</small></article>
+      </div>
+
+      <section class="card">
+        <div class="section-heading table-heading"><div><p class="eyebrow">Ação prioritária</p><h2>Períodos que pedem atenção</h2><p id="attentionCount">Carregue o Excel para iniciar.</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Alerta</th><th>Colaborador</th><th>Competência</th><th>Saldo após reservas</th><th>Limite oficial</th><th>Conferência</th></tr></thead><tbody id="attentionBody"></tbody></table></div>
+      </section>
+    </section>
+
+    <section id="balances" class="vac-view hidden">
+      <section class="card">
+        <div class="section-heading table-heading">
+          <div><p class="eyebrow">Saldo por período aquisitivo</p><h2>Saldos</h2><p id="balanceCount"></p></div>
+          <div class="vac-filters"><input id="balanceSearch" type="search" placeholder="Buscar colaborador..." /><select id="balanceAlert"><option value="ALL">Todos os alertas</option><option value="Prazo ultrapassado">Prazo ultrapassado</option><option value="Urgente">Urgente</option><option value="Atenção">Atenção</option><option value="Planejar">Planejar</option><option value="Sem base contábil">Sem base contábil</option><option value="Verificar dados">Verificar dados</option></select></div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Alerta</th><th>Colaborador</th><th>Competência</th><th>Início aquisitivo</th><th>Fim aquisitivo</th><th>Saldo efetivo</th><th>Reserva</th><th>Saldo após reservas</th><th>Limite oficial</th><th>PDF</th><th>Conferência</th></tr></thead><tbody id="balanceBody"></tbody></table></div>
+      </section>
+    </section>
+
+    <section id="schedules" class="vac-view hidden">
+      <section class="card">
+        <div class="section-heading table-heading">
+          <div><p class="eyebrow">Lançamentos e reservas</p><h2>Programação</h2><p id="scheduleCount"></p></div>
+          <div class="vac-filters"><input id="scheduleSearch" type="search" placeholder="Buscar colaborador..." /><select id="scheduleStatus"><option value="ALL">Todos os status</option><option value="Realizado">Realizado</option><option value="Aprovado">Aprovado</option><option value="Programado">Programado</option><option value="Solicitado">Solicitado</option></select></div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Status</th><th>Colaborador</th><th>Competência</th><th>Início</th><th>Fim</th><th>Tipo</th><th>Dias</th><th>Conflito geral</th><th>Conferência</th><th>Observação</th></tr></thead><tbody id="scheduleBody"></tbody></table></div>
+      </section>
+    </section>
+
+    <section id="calendar" class="vac-view hidden">
+      <section class="card">
+        <div class="section-heading table-heading"><div><p class="eyebrow">Próximas ausências</p><h2>Calendário de férias</h2><p>Programações futuras agrupadas por mês de início.</p></div></div>
+        <div id="calendarGrid" class="calendar-grid"><div class="pending-empty">Carregue a planilha para visualizar o calendário.</div></div>
+      </section>
+    </section>
+
+    <section id="reconciliation" class="vac-view hidden">
+      <section class="card">
+        <div class="section-heading table-heading">
+          <div><p class="eyebrow">Excel × contabilidade</p><h2>Conciliação</h2><p id="reconCount">Carregue o Excel. Com o PDF, o portal recalcula o cruzamento.</p></div>
+          <div class="vac-filters"><input id="reconSearch" type="search" placeholder="Buscar colaborador..." /><select id="reconStatus"><option value="ALL">Todos os status</option><option value="Compatível">Compatível</option><option value="Divergente">Divergente</option><option value="Novo período">Novo período</option><option value="Verificar">Verificar</option><option value="Conferir histórico">Conferir histórico</option></select><button id="exportRecon" class="secondary" type="button">Exportar CSV</button></div>
+        </div>
+        <div id="reconHint" class="info-note">Sem PDF novo, a tela usa a aba Conciliação da planilha. Ao carregar o PDF oficial, o cruzamento passa a ser recalculado por colaborador e período aquisitivo.</div>
+        <div class="table-wrap"><table><thead><tr><th>Status</th><th>Colaborador</th><th>Competência / período</th><th>Saldo Excel</th><th>Saldo PDF</th><th>Direito PDF</th><th>Limite</th><th>Detalhe</th></tr></thead><tbody id="reconBody"></tbody></table></div>
+      </section>
+    </section>
+  </main>
+
+  <footer><p>Férias • Portal de Folha • processamento local</p></footer>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="assets/js/ferias.js"></script>
+</body>
+</html>
