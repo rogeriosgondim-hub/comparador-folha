@@ -1,0 +1,8 @@
+c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99  assets/vendor/xlsx/xlsx.full.min.js
+5b5799e6f8c680663207ac5b42ee14eed2a406fa7af48f50c154f0c0b1566946  assets/vendor/pdfjs-3/pdf.min.js
+feabdf309770ed24bba31a5467836cdc8cf639c705af27d52b585b041bb8527b  assets/vendor/pdfjs-3/pdf.worker.min.js
+27fc2a057a00f92a4334ad06e17dbd7259912954e9fb7f76400bcca5fd190a9c  assets/vendor/pdfjs-4/pdf.min.mjs
+1baa1844c89c80a5b2797c916e75ab29254be46d8e9cb53cb6364d7aad84be36  assets/vendor/pdfjs-4/pdf.worker.min.mjs
+acc7e41455a80765b5fd9c7ee1b8078a6d160bbbca455aeae854de65c947d59e  assets/vendor/jszip/jszip.min.js
+85ba2cc3ff858a20fa49fe6e457bec863ea40b55a9f3725e58a940e62f6f61a4  assets/vendor/jspdf/jspdf.umd.min.js
+2223830cf9a1ec85af014cc71b37c1b1eb566f3d18b2ab8071e96af822c58bdb  assets/vendor/jspdf/jspdf.plugin.autotable.min.js
