@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Ferramentas locais para comparar folha de pagamento e preencher automaticamente o líquido no Excel a partir do PDF." />
+  <title>Folha de Pagamento — Comparador e Preenchimento</title>
+  <link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Processamento 100% local no navegador</p>
+      <h1>Folha de Pagamento</h1>
+      <p class="subtitle">Compare a folha ou preencha automaticamente a remuneração líquida no Excel a partir do PDF, com CPF como chave principal e tratamento separado de TRCT/rescisões.</p>
+    </div>
+    <div class="privacy-badge">🔒 Arquivos não são enviados</div>
+  </header>
+
+  <main class="container">
+    <nav class="module-tabs" aria-label="Funções do aplicativo">
+      <button id="tabCompare" class="module-tab active" type="button">🔎 Comparar folha</button>
+      <button id="tabFill" class="module-tab" type="button">💰 Preencher líquido no Excel</button>
+    </nav>
+
+    <div id="compareModule" class="module-panel">
+    <section class="card intro-card">
+      <div>
+        <h2>1. Carregue os arquivos</h2>
+        <p>Selecione o Excel original e o PDF da folha. Todo o processamento acontece apenas nesta aba do navegador.</p>
+      </div>
+      <div class="settings-row">
+        <label>
+          Tolerância (R$)
+          <input id="tolerance" type="number" min="0" step="0.01" value="0.01" />
+        </label>
+        <label>
+          Limite para “diferença de centavos” (R$)
+          <input id="centsLimit" type="number" min="0.01" step="0.01" value="1.00" />
+        </label>
+      </div>
+
+      <div class="upload-grid">
+        <label class="dropzone" id="excelDrop">
+          <span class="drop-icon">📗</span>
+          <strong>Excel original</strong>
+          <span>.xlsx, .xls ou .csv</span>
+          <input id="excelFile" type="file" accept=".xlsx,.xls,.csv" />
+          <small id="excelStatus">Nenhum arquivo selecionado.</small>
+        </label>
+
+        <label class="dropzone" id="pdfDrop">
+          <span class="drop-icon">📄</span>
+          <strong>PDF da folha</strong>
+          <span>Extrato mensal / folha de pagamento</span>
+          <input id="pdfFile" type="file" accept="application/pdf,.pdf" />
+          <small id="pdfStatus">Nenhum arquivo selecionado.</small>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="compareBtn" class="primary" disabled>Comparar arquivos</button>
+        <button id="resetBtn" class="secondary">Limpar</button>
+      </div>
+      <div id="progressWrap" class="progress-wrap hidden" aria-live="polite">
+        <div class="progress"><div id="progressBar"></div></div>
+        <span id="progressText">Preparando...</span>
+      </div>
+      <div id="message" class="message hidden" role="status"></div>
+    </section>
+
+    <section id="summarySection" class="hidden">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Resultado</p>
+          <h2>2. Painel de resumo</h2>
+        </div>
+        <button id="exportBtn" class="primary">Exportar divergências para Excel</button>
+      </div>
+      <div id="approvalStatus" class="approval-status hidden"></div>
+      <div id="resultAlert" class="result-alert hidden"></div>
+      <div id="summaryCards" class="summary-grid"></div>
+    </section>
+
+    <section id="pendingSection" class="card hidden">
+      <div class="section-heading table-heading">
+        <div>
+          <p class="eyebrow">Ação necessária</p>
+          <h2>3. Pendências para conferência</h2>
+          <p id="pendingCount"></p>
+        </div>
+      </div>
+      <div id="pendingEmpty" class="pending-empty hidden">Nenhuma pendência de conferência encontrada.</div>
+      <div id="pendingWrap" class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>CPF</th>
+              <th>Nome</th>
+              <th>Líquido original</th>
+              <th>Líquido folha</th>
+              <th>Diferença</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody id="pendingBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="resultsSection" class="card hidden">
+      <div class="section-heading table-heading">
+        <div>
+          <h2>4. Resultado detalhado</h2>
+          <p id="resultCount"></p>
+        </div>
+        <div class="filters">
+          <button id="divergenceOnlyBtn" class="secondary" type="button">Mostrar só divergências</button>
+          <input id="searchInput" type="search" placeholder="Buscar nome ou CPF..." />
+          <select id="statusFilter">
+            <option value="ALL">Todos os status</option>
+            <option value="OK">OK</option>
+            <option value="DIVERGÊNCIA">Divergência</option>
+            <option value="DIFERENÇA DE CENTAVOS">Diferença de centavos</option>
+            <option value="TRCT">TRCT</option>
+            <option value="NOVO COLABORADOR">Novo colaborador</option>
+            <option value="SOMENTE NO ORIGINAL">Somente no original</option>
+            <option value="SOMENTE NA FOLHA">Somente na folha</option>
+            <option value="DUPLICADO">Duplicado</option>
+            <option value="VERIFICAR">Verificar</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>CPF</th>
+              <th>Nome</th>
+              <th>Vínculo / tipo</th>
+              <th>Obs. original</th>
+              <th>Líquido original</th>
+              <th>Líquido folha</th>
+              <th>TRCT folha</th>
+              <th>Diferença</th>
+              <th>Chave usada</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="diagnosticsSection" class="card hidden">
+      <h2>Diagnóstico da importação</h2>
+      <div id="diagnostics"></div>
+    </section>
+
+    <section id="historySection" class="card">
+      <div class="section-heading table-heading">
+        <div>
+          <p class="eyebrow">Somente neste navegador</p>
+          <h2>5. Histórico resumido das competências</h2>
+          <p>São armazenados apenas totais e indicadores da comparação. Nomes, CPFs, PDFs e planilhas não são salvos.</p>
+        </div>
+        <button id="clearHistoryBtn" class="secondary" type="button">Limpar histórico</button>
+      </div>
+      <div id="historyEmpty" class="pending-empty">Nenhuma competência registrada neste navegador.</div>
+      <div id="historyWrap" class="table-wrap hidden">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Competência</th>
+              <th>Status</th>
+              <th>Colaboradores</th>
+              <th>OK</th>
+              <th>Divergências</th>
+              <th>Pendências</th>
+              <th>TRCT</th>
+              <th>Novos</th>
+              <th>Total original</th>
+              <th>Total folha</th>
+              <th>Diferença efetiva</th>
+              <th>Processado em</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    </div>
+
+    <div id="fillModule" class="module-panel hidden">
+      <section class="card intro-card">
+        <div>
+          <p class="eyebrow">Preenchimento automático</p>
+          <h2>1. Carregue o PDF da folha e o Excel a ser preenchido</h2>
+          <p>O app identifica os colaboradores pelo CPF, usa o nome normalizado apenas como alternativa e preenche a coluna <strong>Remuneração líquida a receber</strong>. Em TRCT/rescisões, prioriza a rubrica de líquido da rescisão.</p>
+        </div>
+
+        <div class="preserve-banner">
+          <strong>🛡️ Preservação do arquivo</strong>
+          <span>O arquivo final é criado a partir do próprio .xlsx original e altera apenas as células de líquido identificadas. O arquivo original não é modificado.</span>
+        </div>
+
+        <div class="upload-grid">
+          <label class="dropzone" id="fillExcelDrop">
+            <span class="drop-icon">📗</span>
+            <strong>Excel para preencher</strong>
+            <span>.xlsx</span>
+            <input id="fillExcelFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+            <small id="fillExcelStatus">Nenhum arquivo selecionado.</small>
+          </label>
+
+          <label class="dropzone" id="fillPdfDrop">
+            <span class="drop-icon">📄</span>
+            <strong>PDF da folha</strong>
+            <span>Extrato mensal / folha de pagamento</span>
+            <input id="fillPdfFile" type="file" accept="application/pdf,.pdf" />
+            <small id="fillPdfStatus">Nenhum arquivo selecionado.</small>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="fillAnalyzeBtn" class="primary" disabled>Analisar e preparar preenchimento</button>
+          <button id="fillResetBtn" class="secondary">Limpar</button>
+        </div>
+
+        <div id="fillProgressWrap" class="progress-wrap hidden" aria-live="polite">
+          <div class="progress"><div id="fillProgressBar"></div></div>
+          <span id="fillProgressText">Preparando...</span>
+        </div>
+        <div id="fillMessage" class="message hidden" role="status"></div>
+      </section>
+
+      <section id="fillSummarySection" class="hidden">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Conferência antes de gravar</p>
+            <h2>2. Resumo do preenchimento</h2>
+          </div>
+          <div class="actions">
+            <button id="fillAuditBtn" class="secondary" type="button">Exportar conferência</button>
+            <button id="fillGenerateBtn" class="primary" type="button" disabled>Gerar Excel preenchido</button>
+          </div>
+        </div>
+        <div id="fillAlert" class="result-alert hidden"></div>
+        <div id="fillSummaryCards" class="summary-grid"></div>
+      </section>
+
+      <section id="fillPreviewSection" class="card hidden">
+        <div class="section-heading table-heading">
+          <div>
+            <h2>3. Valores que serão usados</h2>
+            <p id="fillPreviewCount"></p>
+          </div>
+          <div class="filters">
+            <input id="fillSearchInput" type="search" placeholder="Buscar nome ou CPF..." />
+            <select id="fillStatusFilter">
+              <option value="ALL">Todos os status</option>
+              <option value="PREENCHER">Preencher</option>
+              <option value="JÁ CORRETO">Já correto</option>
+              <option value="TRCT">TRCT</option>
+              <option value="NÃO ENCONTRADO">Não encontrado</option>
+              <option value="DUPLICADO">Duplicado</option>
+              <option value="VERIFICAR">Verificar</option>
+              <option value="SOMENTE NO PDF">Somente no PDF</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="fill-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>CPF</th>
+                <th>Nome</th>
+                <th>Atual no Excel</th>
+                <th>Líquido mensal PDF</th>
+                <th>Líquido TRCT</th>
+                <th>Valor a gravar</th>
+                <th>Regra aplicada</th>
+                <th>Destino</th>
+              </tr>
+            </thead>
+            <tbody id="fillPreviewBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="fillDiagnosticsSection" class="card hidden">
+        <h2>Diagnóstico do preenchimento</h2>
+        <div id="fillDiagnostics"></div>
+      </section>
+    </div>
+
+  </main>
+
+  <footer>
+    <p>Folha de Pagamento • comparação e preenchimento local • GitHub Pages</p>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
