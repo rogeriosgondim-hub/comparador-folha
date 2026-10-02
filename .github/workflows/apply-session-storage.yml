@@ -1,0 +1,54 @@
+name: Apply safer session storage
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/apply-session-storage.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Move sensitive movements to session storage by default
+        shell: python
+        run: |
+          from pathlib import Path
+
+          old_portal = "const getMoves=()=>{try{return JSON.parse(localStorage.getItem(MOVE_KEY)||'[]')}catch{return[]}};const setMoves=v=>localStorage.setItem(MOVE_KEY,JSON.stringify(v));"
+          new_portal = "const STORAGE_MODE_KEY='portalFolhaStorageModeV1';const getMoveStore=()=>localStorage.getItem(STORAGE_MODE_KEY)==='persistent'?localStorage:sessionStorage;if(!sessionStorage.getItem(MOVE_KEY)&&localStorage.getItem(MOVE_KEY)&&localStorage.getItem(STORAGE_MODE_KEY)!=='persistent'){sessionStorage.setItem(MOVE_KEY,localStorage.getItem(MOVE_KEY));}const getMoves=()=>{try{return JSON.parse(getMoveStore().getItem(MOVE_KEY)||'[]')}catch{return[]}};const setMoves=v=>getMoveStore().setItem(MOVE_KEY,JSON.stringify(v));"
+
+          for name in ('assets/js/portal.js','assets/js/portal.local.js'):
+              p=Path(name); text=p.read_text(encoding='utf-8')
+              if old_portal in text:
+                  p.write_text(text.replace(old_portal,new_portal,1),encoding='utf-8')
+              elif new_portal not in text:
+                  raise SystemExit(f'Expected movement storage block not found in {name}')
+
+          old_export = "function allMoves(){try{return JSON.parse(localStorage.getItem('portalFolhaMovimentacoesV1')||'[]')}catch{return[]}}"
+          new_export = "function allMoves(){try{const store=typeof getMoveStore==='function'?getMoveStore():sessionStorage;return JSON.parse(store.getItem('portalFolhaMovimentacoesV1')||'[]')}catch{return[]}}"
+
+          for name in ('assets/js/movimentacoes-export.js','assets/js/movimentacoes-export.local.js'):
+              p=Path(name); text=p.read_text(encoding='utf-8')
+              if old_export in text:
+                  p.write_text(text.replace(old_export,new_export,1),encoding='utf-8')
+              elif new_export not in text:
+                  raise SystemExit(f'Expected movement export storage block not found in {name}')
+
+      - name: Commit source and runtime changes
+        shell: bash
+        run: |
+          if [ -z "$(git status --porcelain assets/js/portal.js assets/js/portal.local.js assets/js/movimentacoes-export.js assets/js/movimentacoes-export.local.js)" ]; then
+            echo 'No storage changes.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/js/portal.js assets/js/portal.local.js assets/js/movimentacoes-export.js assets/js/movimentacoes-export.local.js
+          git commit -m 'Store sensitive movements in session by default'
+          git push
