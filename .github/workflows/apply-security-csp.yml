@@ -1,0 +1,47 @@
+name: Apply security CSP
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/apply-security-csp.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-csp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add restrictive CSP and referrer policy
+        shell: python
+        run: |
+          from pathlib import Path
+
+          csp = "  <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; script-src 'self'; worker-src 'self' blob:; connect-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; object-src 'none'; frame-src 'self'; media-src 'none'; base-uri 'self'; form-action 'self'\" />\n  <meta name=\"referrer\" content=\"no-referrer\" />\n"
+
+          for name in ('index.html', 'ferias.html', 'legacy.html'):
+              p = Path(name)
+              text = p.read_text(encoding='utf-8')
+              if 'http-equiv="Content-Security-Policy"' in text:
+                  continue
+              needle = '  <meta name="viewport" content="width=device-width, initial-scale=1" />\n'
+              if needle not in text:
+                  raise SystemExit(f'Viewport marker not found in {name}')
+              text = text.replace(needle, needle + csp, 1)
+              p.write_text(text, encoding='utf-8')
+
+      - name: Commit CSP changes
+        shell: bash
+        run: |
+          if [ -z "$(git status --porcelain index.html ferias.html legacy.html)" ]; then
+            echo 'No CSP changes.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html ferias.html legacy.html
+          git commit -m 'Add restrictive browser content security policy'
+          git push
