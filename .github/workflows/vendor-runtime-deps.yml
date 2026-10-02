@@ -1,0 +1,50 @@
+name: Vendor runtime dependencies
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/vendor-runtime-deps.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download pinned browser libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets/vendor/xlsx assets/vendor/pdfjs-3 assets/vendor/pdfjs-4 assets/vendor/jszip assets/vendor/jspdf
+
+          curl --fail --location --retry 3 --silent --show-error https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js -o assets/vendor/xlsx/xlsx.full.min.js
+          curl --fail --location --retry 3 --silent --show-error https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js -o assets/vendor/pdfjs-3/pdf.min.js
+          curl --fail --location --retry 3 --silent --show-error https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js -o assets/vendor/pdfjs-3/pdf.worker.min.js
+          curl --fail --location --retry 3 --silent --show-error https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs -o assets/vendor/pdfjs-4/pdf.min.mjs
+          curl --fail --location --retry 3 --silent --show-error https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs -o assets/vendor/pdfjs-4/pdf.worker.min.mjs
+          curl --fail --location --retry 3 --silent --show-error https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js -o assets/vendor/jszip/jszip.min.js
+          curl --fail --location --retry 3 --silent --show-error https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js -o assets/vendor/jspdf/jspdf.umd.min.js
+          curl --fail --location --retry 3 --silent --show-error https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js -o assets/vendor/jspdf/jspdf.plugin.autotable.min.js
+
+      - name: Record checksums
+        shell: bash
+        run: |
+          sha256sum assets/vendor/xlsx/xlsx.full.min.js assets/vendor/pdfjs-3/pdf.min.js assets/vendor/pdfjs-3/pdf.worker.min.js assets/vendor/pdfjs-4/pdf.min.mjs assets/vendor/pdfjs-4/pdf.worker.min.mjs assets/vendor/jszip/jszip.min.js assets/vendor/jspdf/jspdf.umd.min.js assets/vendor/jspdf/jspdf.plugin.autotable.min.js > assets/vendor/SHA256SUMS.txt
+
+      - name: Commit vendored files
+        shell: bash
+        run: |
+          if [ -z "$(git status --porcelain assets/vendor)" ]; then
+            echo 'No vendor changes.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/vendor
+          git commit -m 'Vendor pinned browser dependencies'
+          git push
