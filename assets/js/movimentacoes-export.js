@@ -8,7 +8,7 @@
   const style=document.createElement('style');style.textContent='.move-export-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.move-export-controls select{border:1px solid #dce6f2;border-radius:8px;padding:9px 10px;background:#fff;min-width:160px}@media(max-width:700px){.move-export-controls{width:100%}.move-export-controls select,.move-export-controls button{width:100%}}';document.head.appendChild(style);
   const headers=['Competência','Data','Tipo','Colaborador','CPF','Salário anterior','Novo salário','Diferença','Observação'];
   const n=v=>v===''||v===null||v===undefined?null:(Number.isFinite(Number(v))?Number(v):null);
-  function allMoves(){try{return JSON.parse(localStorage.getItem('portalFolhaMovimentacoesV1')||'[]')}catch{return[]}}
+  function allMoves(){try{const store=typeof getMoveStore==='function'?getMoveStore():sessionStorage;return JSON.parse(store.getItem('portalFolhaMovimentacoesV1')||'[]')}catch{return[]}}
   function comp(){return document.getElementById('portalCompetence')?.value||new Date().toISOString().slice(0,7)}
   function scoped(){const c=comp(),scope=document.getElementById('moveExportScope').value;let ms=allMoves().filter(m=>(m.date||'').slice(0,7)===c);if(scope==='admission')ms=ms.filter(m=>m.type==='Admissão');else if(scope==='exit')ms=ms.filter(m=>m.type==='Desligamento');else if(scope==='salary')ms=ms.filter(m=>m.type==='Alteração salarial');else if(scope==='other')ms=ms.filter(m=>!['Admissão','Desligamento','Alteração salarial'].includes(m.type));return ms}
   function rows(ms){return ms.map(m=>{const o=n(m.oldSalary),nn=n(m.newSalary);return[comp(),m.date||'',m.type||'',m.name||'',m.cpf||'',o??'',nn??'',o!==null&&nn!==null?nn-o:'',m.note||'']})}
