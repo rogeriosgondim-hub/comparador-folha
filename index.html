@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Portal local para gestão mensal da folha de pagamento: painel, folha mensal, movimentações, comparação e preenchimento." />
+  <meta name="description" content="Portal local para gestão mensal da folha de pagamento e férias: painel, folha mensal, movimentações, férias, comparação e preenchimento." />
   <title>Portal de Folha — Nomus</title>
   <link rel="stylesheet" href="assets/css/styles.css" />
   <link rel="stylesheet" href="assets/css/portal.css" />
@@ -13,7 +13,7 @@
     <div>
       <p class="eyebrow">Gestão mensal • processamento local</p>
       <h1>Portal de Folha de Pagamento</h1>
-      <p class="subtitle">Um único ponto para acompanhar a competência, registrar movimentações e acessar as ferramentas de comparação e preenchimento da folha.</p>
+      <p class="subtitle">Um único ponto para acompanhar a competência, registrar movimentações, controlar férias e acessar as ferramentas de comparação e preenchimento da folha.</p>
     </div>
     <div class="privacy-badge">🔒 Dados permanecem no navegador</div>
   </header>
@@ -23,6 +23,7 @@
       <button class="portal-tab active" data-target="dashboardModule" type="button">▦ Painel</button>
       <button class="portal-tab" data-target="monthlyModule" type="button">▤ Folha mensal</button>
       <button class="portal-tab" data-target="movesModule" type="button">⇄ Movimentações</button>
+      <button class="portal-tab" data-target="vacationModule" type="button">☀ Férias</button>
       <button class="portal-tab" data-target="toolsModule" type="button">⌕ Comparar / Preencher</button>
     </nav>
 
@@ -38,17 +39,15 @@
         <article class="portal-kpi"><span>Desligamentos</span><strong id="kpiExits">0</strong><small>no período</small></article>
         <article class="portal-kpi"><span>Alterações salariais</span><strong id="kpiSalaryChanges">0</strong><small>no período</small></article>
       </div>
-
       <section class="card portal-card">
         <div class="section-heading table-heading"><div><p class="eyebrow">Fluxo recomendado</p><h2>Fechamento mensal</h2></div></div>
         <div class="workflow-grid">
           <div><b>1</b><strong>Atualizar base</strong><span>Carregue a planilha da competência.</span></div>
           <div><b>2</b><strong>Registrar movimentações</strong><span>Admissões, desligamentos e reajustes.</span></div>
-          <div><b>3</b><strong>Preencher líquido</strong><span>Use o PDF da folha para atualizar os valores.</span></div>
-          <div><b>4</b><strong>Comparar</strong><span>Conferir divergências antes do fechamento.</span></div>
+          <div><b>3</b><strong>Revisar férias</strong><span>Atualize controle e PDF da contabilidade.</span></div>
+          <div><b>4</b><strong>Preencher e comparar</strong><span>Conferir líquidos e divergências.</span></div>
         </div>
       </section>
-
       <section class="card portal-card">
         <div class="section-heading table-heading"><div><p class="eyebrow">Últimas movimentações</p><h2>Resumo da competência</h2></div></div>
         <div id="dashboardMovesEmpty" class="pending-empty">Nenhuma movimentação registrada.</div>
@@ -59,21 +58,13 @@
     <section id="monthlyModule" class="portal-panel hidden">
       <section class="card intro-card portal-card">
         <div><p class="eyebrow">Base mensal</p><h2>Folha da competência</h2><p>Carregue a planilha-base para visualizar um resumo do quadro. O arquivo é lido localmente e não é enviado.</p></div>
-        <label class="dropzone portal-dropzone">
-          <span class="drop-icon">📗</span><strong>Planilha da folha</strong><span>.xlsx, .xls ou .csv</span>
-          <input id="portalExcelFile" type="file" accept=".xlsx,.xls,.csv" />
-          <small id="portalExcelStatus">Nenhum arquivo selecionado.</small>
-        </label>
+        <label class="dropzone portal-dropzone"><span class="drop-icon">📗</span><strong>Planilha da folha</strong><span>.xlsx, .xls ou .csv</span><input id="portalExcelFile" type="file" accept=".xlsx,.xls,.csv" /><small id="portalExcelStatus">Nenhum arquivo selecionado.</small></label>
         <div id="monthlyMessage" class="message hidden" role="status"></div>
       </section>
       <section id="monthlySummary" class="card portal-card hidden">
         <div class="section-heading table-heading"><div><p class="eyebrow">Resumo local</p><h2>Base identificada</h2></div></div>
-        <div class="portal-kpis compact">
-          <article class="portal-kpi"><span>Colaboradores</span><strong id="monthlyEmployees">0</strong></article>
-          <article class="portal-kpi"><span>Folha localizada</span><strong id="monthlySheet">—</strong></article>
-          <article class="portal-kpi"><span>Arquivo</span><strong id="monthlyFileName">—</strong></article>
-        </div>
-        <div class="info-note">Nesta primeira etapa, o portal faz a leitura e o controle operacional. A planilha oficial continua sendo o arquivo Excel original; nenhuma fórmula é alterada aqui.</div>
+        <div class="portal-kpis compact"><article class="portal-kpi"><span>Colaboradores</span><strong id="monthlyEmployees">0</strong></article><article class="portal-kpi"><span>Folha localizada</span><strong id="monthlySheet">—</strong></article><article class="portal-kpi"><span>Arquivo</span><strong id="monthlyFileName">—</strong></article></div>
+        <div class="info-note">A planilha oficial continua sendo o arquivo Excel original; nenhuma fórmula é alterada aqui.</div>
       </section>
     </section>
 
@@ -98,14 +89,47 @@
       </section>
     </section>
 
+    <section id="vacationModule" class="portal-panel hidden">
+      <div class="section-heading portal-heading"><div><p class="eyebrow">Controle integrado</p><h2>Férias</h2><p>Importe o controle em Excel e o relatório oficial da contabilidade para acompanhar saldos, programação e conciliação.</p></div></div>
+      <div class="vacation-subnav" aria-label="Áreas do módulo de férias">
+        <button class="vacation-chip active" type="button">Visão geral</button><button class="vacation-chip" type="button">Saldos</button><button class="vacation-chip" type="button">Programação</button><button class="vacation-chip" type="button">Calendário</button><button class="vacation-chip" type="button">Conciliação</button>
+      </div>
+      <section class="card portal-card vacation-import-card">
+        <div><p class="eyebrow">Atualização da base</p><h2>Importar arquivos de férias</h2><p>O Excel e o PDF são processados localmente. Nesta etapa, o portal apenas lê e resume os dados; os arquivos originais não são modificados.</p></div>
+        <div class="upload-grid vacation-upload-grid">
+          <label class="dropzone"><span class="drop-icon">📗</span><strong>Controle de férias</strong><span>.xlsx</span><input id="vacationExcelFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /><small id="vacationExcelStatus">Nenhum arquivo selecionado.</small></label>
+          <label class="dropzone"><span class="drop-icon">📄</span><strong>PDF da contabilidade</strong><span>Programação de Férias</span><input id="vacationPdfFile" type="file" accept="application/pdf,.pdf" /><small id="vacationPdfStatus">Nenhum arquivo selecionado.</small></label>
+        </div>
+        <div id="vacationMessage" class="message hidden" role="status"></div>
+      </section>
+      <section id="vacationSummary" class="hidden">
+        <div class="portal-kpis vacation-kpis">
+          <article class="portal-kpi"><span>Colaboradores no controle</span><strong id="vacationEmployees">—</strong><small>base interna</small></article>
+          <article class="portal-kpi"><span>Períodos na Base Contábil</span><strong id="vacationPeriods">—</strong><small>períodos aquisitivos</small></article>
+          <article class="portal-kpi"><span>Registros de programação</span><strong id="vacationSchedules">—</strong><small>linhas identificadas</small></article>
+          <article class="portal-kpi"><span>Conciliações</span><strong id="vacationConciliation">—</strong><small>linhas para conferência</small></article>
+          <article class="portal-kpi"><span>Empregados no PDF</span><strong id="vacationPdfEmployees">—</strong><small id="vacationPdfBaseDate">PDF não carregado</small></article>
+        </div>
+        <section class="card portal-card">
+          <div class="section-heading table-heading"><div><p class="eyebrow">Estrutura reconhecida</p><h2>Áreas disponíveis no controle</h2></div></div>
+          <div id="vacationSheets" class="vacation-sheet-grid"></div>
+        </section>
+        <section class="card portal-card">
+          <div class="section-heading table-heading"><div><p class="eyebrow">Conciliação</p><h2>Próxima etapa do módulo</h2></div></div>
+          <div class="info-note">A próxima evolução fará o cruzamento colaborador/período entre a planilha e o PDF e classificará cada item como Compatível, Divergente, Novo período ou Verificar, seguindo a mesma lógica do comparador de folha.</div>
+        </section>
+      </section>
+    </section>
+
     <section id="toolsModule" class="portal-panel hidden">
-      <section class="card portal-card tools-intro"><div><p class="eyebrow">Ferramentas existentes preservadas</p><h2>Comparar folha e preencher líquido</h2><p>O comparador atual foi mantido intacto nesta primeira evolução do portal.</p></div><a class="primary portal-link" href="legacy.html" target="_blank" rel="noopener">Abrir em nova aba</a></section>
+      <section class="card portal-card tools-intro"><div><p class="eyebrow">Ferramentas existentes preservadas</p><h2>Comparar folha e preencher líquido</h2><p>O comparador atual foi mantido intacto dentro do portal.</p></div><a class="primary portal-link" href="legacy.html" target="_blank" rel="noopener">Abrir em nova aba</a></section>
       <iframe class="legacy-frame" src="legacy.html" title="Comparador de folha existente"></iframe>
     </section>
   </main>
 
   <footer><p>Portal de Folha • processamento local • GitHub Pages</p></footer>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/portal.js"></script>
 </body>
 </html>
