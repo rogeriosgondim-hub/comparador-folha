@@ -1,10 +1,12 @@
 // Fixtures fictícias; nenhum arquivo ou dado de colaborador é incluído no repositório.
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');
 const stub=new Proxy(()=>{}, {get:(_,p)=>p==='getItem'?()=>null:p==='value'?'':stub,apply:()=>stub});
+(async()=>{
+const audit=await import('../assets/js/field-audit.js');
 for(const name of ['app.js','app.local.js']){
- const context={console,window:{},document:{getElementById:()=>stub},localStorage:stub,pdfjsLib:{},setTimeout:()=>{}};
+ const context={console,window:{},document:{getElementById:()=>stub},localStorage:stub,pdfjsLib:{GlobalWorkerOptions:{}},...audit,setTimeout:()=>{}};
  vm.createContext(context);
- vm.runInContext(fs.readFileSync(path.join(__dirname,'../assets/js',name),'utf8').split('\n').slice(2).join('\n'),context);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../assets/js',name),'utf8').split('\n').filter(l=>!l.startsWith('import ')).join('\n'),context);
  const lines=['Emissão: 06/10/2026','Competência: 09/2026','Empr.: 1 PESSOA TESTE Situação: Trabalhando CPF: 123.456.789-00 Adm: 01/08/2026','Vínculo: Celetista CC: 1','Proventos: 1.000,00 Descontos: 100,00 Líquido: 900,00'];
  context.fixture=lines;
  vm.runInContext('pdfLines=async()=>({numPages:1,pages:[{page:1,lines:fixture}]})',context);
@@ -28,3 +30,5 @@ for(const name of ['app.js','app.local.js']){
   console.log(name+': competência, líquidos vazios, preenchimento e PDF não reconhecido — OK');
  })().catch(e=>{console.error(e);process.exitCode=1;});
 }
+
+})().catch(e=>{console.error(e);process.exitCode=1;});

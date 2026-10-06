@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {FIELD_SCHEMA,parseFieldPdf,auditFields,auditSummary} from '../assets/js/field-audit.js';
+const block=['Empr.: 1 PESSOA TESTE Situação: Trabalhando CPF: 123.456.789-00 Adm: 01/06/2022','Vínculo: Celetista CC: 1 Horas Mês: 200,00','Cargo: 2 ANALISTA C.B.O: 123 Filial: 1 Salário: 1.000,00','8781 DIAS NORMAIS 15,00 500,00 P 339 ASSISTENCIA MEDICA 5,11 5,11 D','416 AUXÍLIO HOME OFFICE 100,00 100,00 P 998 DESC INSS 10,00 50,00 D','25 ADICIONAL NOTURNO (INFOR) 0:02 0,10 P','ND: 0 Proventos: 600,10 Descontos: 55,11 Líquido: 544,99'];
+const fields=parseFieldPdf(block);assert.equal(fields.salary,1000);assert.equal(fields.rubrics.length,5);assert.equal(fields.totalsMatched,true);assert.equal(fields.rubrics.find(r=>r.code==='339').value,5.11);
+const e={rawName:'PESSOA TESTE',nameNorm:'PESSOA TESTE',cpf:'12345678900',row:10,auditCells:Object.fromEntries(FIELD_SCHEMA.map(f=>[f.col,{header:f.label,value:null,display:''}]))};
+for(const [col,value] of Object.entries({C:'PESSOA TESTE',D:'Funcionário',E:new Date(2022,5,1),J:1000,P:5.10814772,AA:100,Y:'0:02:00',AL:'123.456.789-00'}))e.auditCells[col].value=value;
+const p={rawName:'PESSOA TESTE',nameNorm:e.nameNorm,cpf:e.cpf,type:'Celetista',obs:'Trabalhando',fields,net:544.99,trctValue:null,isTRCT:false,page:1};
+let rows=auditFields([e],[p]);const get=c=>rows.find(r=>r.col===c);assert.equal(rows.length,38);assert.equal(get('J').status,'COMPATÍVEL');assert.equal(get('P').status,'COMPATÍVEL');assert.equal(get('Y').status,'COMPATÍVEL');assert.equal(get('E').status,'COMPATÍVEL');assert.equal(get('AG').status,'SEM VALOR NO EXCEL');assert.equal(get('AH').status,'SEM EQUIVALENTE NO PDF');assert.equal(get('S').status,'CONFERÊNCIA MANUAL');
+e.auditCells.J.value=900;rows=auditFields([e],[p]);assert.equal(get('J').difference,100);assert.equal(get('J').status,'DIVERGÊNCIA');
+e.auditCells.AB.value=25;rows=auditFields([e],[p]);assert.equal(get('AB').status,'RUBRICA AUSENTE NO PDF');assert.equal(get('AB').difference,null);
+rows=auditFields([e],[p,p]);assert.equal(get('J').status,'CORRESPONDÊNCIA AMBÍGUA');
+rows=auditFields([e],[{...p,fields:{...fields,totalsMatched:false}}]);assert.equal(get('AA').status,'EXTRAÇÃO INCOMPLETA');
+e.auditCells.I.value=820;e.auditCells.J.value=null;rows=auditFields([e],[{...p,type:'Aprendiz',fields:{...fields,salary:820,role:'JOVEM APRENDIZ'}}]);assert.equal(get('I').status,'COMPATÍVEL');assert.equal(get('J').status,'NÃO APLICÁVEL');
+e.auditCells.J.header='Outra coluna';rows=auditFields([e],[p]);assert.equal(get('J').status,'CABEÇALHO DIFERENTE');assert.ok(auditSummary(rows).fields===38);
+console.log('Conferência C–AN: salário contratual, precisão monetária, horas, admissão, ausência de evidência, duplicados, extração incompleta e aprendiz — OK');

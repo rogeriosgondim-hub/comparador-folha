@@ -74,3 +74,18 @@ A competência é extraída exclusivamente do campo “Competência” do PDF; d
 Teste de regressão com dados fictícios: `node tests/payroll-import.cjs`.
 
 Os registros encontrados no PDF com líquido vazio no Excel recebem “LÍQUIDO VAZIO NO EXCEL” e informam a célula a preencher. “VERIFICAR” é reservado para dados que não puderam ser reconhecidos. Novos colaboradores e TRCT mantêm suas categorias específicas; o indicador de líquidos vazios inclui todos os registros do Excel.
+
+## Conferência ampliada C a AN
+
+A seção “Conferência por campo — C a AN” analisa as 38 colunas para cada colaborador. A correspondência usa CPF primeiro e nome normalizado como alternativa; duplicidades bloqueiam a associação automática. O cabeçalho de cada coluna é validado antes de aplicar o mapeamento.
+
+- Cadastro: nome, CPF, categoria de vínculo e admissão.
+- Salário: campo contratual Salário do PDF versus I (estágio) ou J (funcionário), sem confundir com proventos ou dias normais proporcionais. Aprendiz com remuneração em I e J vazio é tratado explicitamente.
+- Rubricas: saúde 339, odonto dependentes 334, home office 416, educação 447, creche 492, empréstimo interno 474; descrições específicas para comissões, bônus, Wellhub e VT. Horas extras/adicional noturno usam referências em horas, sem incluir reflexos DSR.
+- Jornada semanal versus mensal, indicadores de benefícios, faltas, observações e crédito consignado/provisões exigem conferência manual.
+- Nascimento, idade, custos/subsídios do plano, banco/PIX/agência/conta e plano escolhido não têm equivalente neste extrato.
+- Ausência de rubrica não é zero nem aprovação. Célula vazia com valor no PDF é pendência explícita. A soma das rubricas extraídas deve conferir com proventos e descontos de cada bloco para validar comparações de rubricas.
+
+A exportação completa contém cinco abas: Conferência C-AN, Divergências, Pendências, Mapeamento e Rubricas PDF. A tela limita a exibição a blocos de 200 campos, com busca e filtros; a exportação inclui todos. A comparação e o histórico de líquido permanecem identificados separadamente.
+
+Teste específico: `node tests/field-audit.mjs`. Dados de produção nunca entram no repositório.
