@@ -72,3 +72,5 @@ Se “Remuneração líquida a receber” estiver vazia, a comparação monetár
 A competência é extraída exclusivamente do campo “Competência” do PDF; datas de emissão e admissão não são utilizadas.
 
 Teste de regressão com dados fictícios: `node tests/payroll-import.cjs`.
+
+Os registros encontrados no PDF com líquido vazio no Excel recebem “LÍQUIDO VAZIO NO EXCEL” e informam a célula a preencher. “VERIFICAR” é reservado para dados que não puderam ser reconhecidos. Novos colaboradores e TRCT mantêm suas categorias específicas; o indicador de líquidos vazios inclui todos os registros do Excel.

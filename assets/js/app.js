@@ -7,7 +7,7 @@ const state = { excelFile:null, pdfFile:null, original:[], folha:[], results:[],
 const STATUS = {
   OK:'OK', DIV:'DIVERGÊNCIA', CENT:'DIFERENÇA DE CENTAVOS', TRCT:'TRCT',
   NOVO:'NOVO COLABORADOR', SO_ORIG:'SOMENTE NO ORIGINAL', SO_FOLHA:'SOMENTE NA FOLHA',
-  DUP:'DUPLICADO', VER:'VERIFICAR'
+  DUP:'DUPLICADO', VER:'VERIFICAR', FILL:'LÍQUIDO VAZIO NO EXCEL'
 };
 const moneyFmt = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
 const HISTORY_KEY = 'comparadorFolhaHistoricoV1';
@@ -126,7 +126,7 @@ async function parseExcel(file){
     const obs=c.obs!==undefined?String(row[c.obs]??'').trim():'';
     const type=c.type!==undefined?String(row[c.type]??'').trim():'';
     const netRaw=c.net!==undefined?row[c.net]:'';
-    out.push({source:'ORIGINAL',row:r+1,rawName,nameNorm,cpf:ccpf,type,obs,net:money(netRaw),netRaw:String(netRaw??''),isTRCT:hasTrct(rawName,obs),isNew:hasNovo(rawName,obs)});
+    out.push({source:'ORIGINAL',row:r+1,rawName,nameNorm,cpf:ccpf,type,obs,net:money(netRaw),netRaw:String(netRaw??''),netCell:c.net!==undefined?colLetter(c.net)+(r+1):'',isTRCT:hasTrct(rawName,obs),isNew:hasNovo(rawName,obs)});
   }
   return {records:out,sheetName:chosen.sheetName,headerRow:chosen.header.row+1};
 }
@@ -542,9 +542,9 @@ function resetFill(){
 
 function result(o,f,status,matchKey,diff){
   return {status,cpf:o?.cpf||f?.cpf||'',name:o?.rawName||f?.rawName||'',type:o?.type||f?.type||'',obs:o?.obs||'',
-    originalNet:o?.net??null,folhaNet:f?.net??null,trctNet:f?.trctValue??null,diff,matchKey,originalRow:o?.row??'',pdfPage:f?.page??''};
+    originalNet:o?.net??null,folhaNet:f?.net??null,trctNet:f?.trctValue??null,diff,matchKey,originalRow:o?.row??'',originalCell:o?.netCell||'',pdfPage:f?.page??''};
 }
-function rank(s){ const a=[STATUS.DIV,STATUS.CENT,STATUS.VER,STATUS.DUP,STATUS.SO_ORIG,STATUS.SO_FOLHA,STATUS.TRCT,STATUS.NOVO,STATUS.OK]; return a.indexOf(s); }
+function rank(s){ const a=[STATUS.DIV,STATUS.CENT,STATUS.VER,STATUS.FILL,STATUS.DUP,STATUS.SO_ORIG,STATUS.SO_FOLHA,STATUS.TRCT,STATUS.NOVO,STATUS.OK]; return a.indexOf(s); }
 
 function compare(original,folha,tol,cents){
   const cp=new Map(), nm=new Map();
@@ -565,7 +565,10 @@ function compare(original,folha,tol,cents){
     }
     const diff=o.net!==null&&f.net!==null?f.net-o.net:null;
     if(o.isNew){out.push(result(o,f,STATUS.NOVO,key,diff));continue;}
-    if(diff===null){out.push(result(o,f,STATUS.VER,key,null));continue;}
+    if(diff===null){
+      const status=f.net!==null&&o.net===null?STATUS.FILL:STATUS.VER;
+      out.push(result(o,f,status,key,null));continue;
+    }
     const ad=Math.abs(diff);
     out.push(result(o,f,ad<=tol?STATUS.OK:(ad<=cents?STATUS.CENT:STATUS.DIV),key,diff));
   }
@@ -575,16 +578,17 @@ function compare(original,folha,tol,cents){
 
 function statusClass(s){
   if(s===STATUS.OK)return'ok'; if(s===STATUS.DIV)return'divergencia'; if(s===STATUS.CENT)return'centavos';
-  if(s===STATUS.TRCT)return'trct'; if(s===STATUS.NOVO)return'novo'; if(s===STATUS.DUP)return'duplicado'; if(s===STATUS.VER)return'verificar'; return'ausente';
+  if(s===STATUS.TRCT)return'trct'; if(s===STATUS.NOVO)return'novo'; if(s===STATUS.DUP)return'duplicado'; if(s===STATUS.FILL)return'liquidovazio'; if(s===STATUS.VER)return'verificar'; return'ausente';
 }
-function actionableStatuses(){ return new Set([STATUS.DIV,STATUS.CENT,STATUS.SO_ORIG,STATUS.SO_FOLHA,STATUS.DUP,STATUS.VER]); }
+function actionableStatuses(){ return new Set([STATUS.DIV,STATUS.CENT,STATUS.SO_ORIG,STATUS.SO_FOLHA,STATUS.DUP,STATUS.VER,STATUS.FILL]); }
 function pendingReason(r){
   if(r.status===STATUS.DIV) return 'Diferença de líquido acima do limite de centavos.';
   if(r.status===STATUS.CENT) return 'Diferença de líquido dentro do limite de centavos configurado.';
   if(r.status===STATUS.SO_ORIG) return 'Registro existe no Excel original, mas não foi encontrado na folha.';
   if(r.status===STATUS.SO_FOLHA) return 'Registro existe na folha, mas não foi encontrado no Excel original.';
   if(r.status===STATUS.DUP) return 'Mais de um registro possível para a mesma chave.';
-  if(r.status===STATUS.VER) return 'Faltam dados suficientes para validar o registro automaticamente.';
+  if(r.status===STATUS.FILL) return 'Colaborador identificado no PDF por '+r.matchKey+'. O líquido foi lido, mas a célula '+(r.originalCell||('da linha '+r.originalRow))+' (“Remuneração líquida a receber”) está vazia no Excel. Use “Preencher líquidos com estes arquivos”.';
+  if(r.status===STATUS.VER) return r.folhaNet===null ? 'Colaborador identificado, mas o valor líquido não foi reconhecido no PDF. Confira o extrato antes de preencher.' : 'Não foi possível comparar os valores líquidos. Confira o Excel e o PDF.';
   return '';
 }
 function comparisonSnapshot(competence=''){
@@ -606,7 +610,7 @@ function comparisonSnapshot(competence=''){
     status,statusClassName,
     collaborators:r.length,
     ok:r.filter(x=>x.status===STATUS.OK).length,
-    divergences:r.filter(x=>x.status===STATUS.DIV||x.status===STATUS.CENT).length,
+    divergences:comparable.length?r.filter(x=>x.status===STATUS.DIV||x.status===STATUS.CENT).length:null,
     pending:pend.length,
     trct:r.filter(x=>x.status===STATUS.TRCT).length,
     newEmployees:r.filter(x=>x.status===STATUS.NOVO).length,
@@ -643,7 +647,7 @@ function renderHistory(){
   body.innerHTML=items.map(x=>'<tr>'+
     '<td><strong>'+esc(x.competence)+'</strong></td>'+
     '<td><span class="history-status '+esc(x.statusClassName||'partial')+'">'+esc(x.status)+'</span></td>'+
-    '<td>'+esc(x.collaborators)+'</td><td>'+esc(x.ok)+'</td><td>'+esc(x.divergences)+'</td><td>'+esc(x.pending)+'</td>'+
+    '<td>'+esc(x.collaborators)+'</td><td>'+esc(x.ok)+'</td><td>'+(x.originalTotal===null||x.divergences===null?'N/D':esc(x.divergences))+'</td><td>'+esc(x.pending)+'</td>'+
     '<td>'+esc(x.trct)+'</td><td>'+esc(x.newEmployees)+'</td>'+
     '<td class="money">'+(x.originalTotal===null?'N/D':moneyFmt.format(x.originalTotal))+'</td>'+
     '<td class="money">'+moneyFmt.format(Number(x.folhaTotal||0))+'</td>'+
@@ -698,7 +702,8 @@ function renderSummary(){
     ['Total original',validOriginal.length?moneyFmt.format(originalTotal):'N/D','info'],['Total folha (mensal)',moneyFmt.format(folhaTotal),'info'],
     ['Total TRCT extraído',moneyFmt.format(trctTotal),'warn'],['Diferença efetiva',canCompareMoney?moneyFmt.format(eff):'N/D',canCompareMoney?(Math.abs(eff)<=Number($('tolerance').value||.01)?'good':'bad'):'warn'],
     ['Colaboradores OK',count(STATUS.OK),'good'],['Divergências de líquido',canCompareMoney?(count(STATUS.DIV)+count(STATUS.CENT)):'N/D',canCompareMoney?((count(STATUS.DIV)+count(STATUS.CENT))>0?'critical':'good'):'warn'],
-    ['Ausentes',count(STATUS.SO_ORIG)+count(STATUS.SO_FOLHA),'warn'],['Pendentes / duplicados',count(STATUS.VER)+count(STATUS.DUP),'warn'],
+    ['Ausentes',count(STATUS.SO_ORIG)+count(STATUS.SO_FOLHA),'warn'],['Dados a revisar / duplicados',count(STATUS.VER)+count(STATUS.DUP),'warn'],
+    ['Líquidos vazios no Excel',state.original.filter(x=>x.net===null).length,'warn'],
     ['TRCT / rescisões',count(STATUS.TRCT),'warn'],['Novos colaboradores',count(STATUS.NOVO),'info']
   ];
   $('summaryCards').innerHTML=metrics.map(([l,v,c])=>'<div class="metric '+c+'"><span class="label">'+esc(l)+'</span><span class="value">'+esc(v)+'</span></div>').join('');
@@ -736,6 +741,7 @@ function renderDiag(){
   const d=state.diagnostics;
   $('diagnostics').innerHTML='<div><strong>Excel:</strong> aba “'+esc(d.sheetName||'')+'”, cabeçalho na linha '+(d.headerRow||'—')+', '+(d.originalCount||0)+' registros importados.</div>'+
   '<div><strong>PDF:</strong> '+(d.pdfPages||0)+' páginas, '+(d.folhaCount||0)+' colaboradores identificados.</div>'+
+  '<div><strong>Líquidos vazios no Excel:</strong> '+state.original.filter(x=>x.net===null).length+'. O status “Líquido vazio no Excel” indica correspondência encontrada e preenchimento pendente, sem comparação monetária.</div>'+
   '<div><strong>Chave:</strong> CPF primeiro; nome normalizado como alternativa.</div>'+
   '<div><strong>TRCT:</strong> rescisões são tratadas separadamente do líquido mensal.</div>';
 }
