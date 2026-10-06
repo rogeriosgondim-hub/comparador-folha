@@ -11,9 +11,14 @@ for(const name of ['app.js','app.local.js']){
  (async()=>{
   const pdf=await context.parsePdf({},()=>{});
   assert.equal(pdf.competence,'09/2026');assert.equal(pdf.records.length,1);assert.equal(pdf.records[0].net,900);
-  const blank={rawName:'PESSOA TESTE',nameNorm:'PESSOA TESTE',cpf:'12345678900',net:null,currentNet:null,isTRCT:false,isNew:false,row:10,cell:'AG10'};
+  const blank={rawName:'PESSOA TESTE',nameNorm:'PESSOA TESTE',cpf:'12345678900',net:null,currentNet:null,isTRCT:false,isNew:false,row:10,cell:'AG10',netCell:'AG10'};
   const comparison=context.compare([blank],pdf.records,.01,1);
-  assert.equal(comparison[0].status,'VERIFICAR');assert.equal(comparison[0].diff,null);
+  assert.equal(comparison[0].status,'LÍQUIDO VAZIO NO EXCEL');assert.equal(comparison[0].diff,null);
+  assert.match(context.pendingReason(comparison[0]),/AG10.*está vazia/);
+  const unreadable=context.compare([blank],[{...pdf.records[0],net:null}],.01,1);
+  assert.equal(unreadable[0].status,'VERIFICAR');assert.match(context.pendingReason(unreadable[0]),/não foi reconhecido no PDF/);
+  const filled=context.compare([{...blank,net:900}],pdf.records,.01,1);assert.equal(filled[0].status,'OK');
+  const divergent=context.compare([{...blank,net:890}],pdf.records,.01,1);assert.equal(divergent[0].status,'DIVERGÊNCIA');
   const fill=context.prepareFillRows([blank],pdf.records);
   assert.equal(fill[0].status,'PREENCHER');assert.equal(fill[0].target,900);assert.equal(fill[0].cell,'AG10');
   context.fixture=lines.filter(l=>!l.startsWith('Competência:'));
