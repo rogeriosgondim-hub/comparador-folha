@@ -216,7 +216,9 @@ async function parsePdf(file,onProgress=progress){
   let records=[];
   for(const pg of data.pages) records.push(...parsePdfPage(pg.lines,pg.page));
   const flat=data.pages.flatMap(pg=>pg.lines);
-  const comp=(flat.join(' ').match(/\b(0[1-9]|1[0-2])\/20\d{2}\b/)||[])[0]||'';
+  // Emissão e admissão também contêm datas: somente o campo Competência identifica a folha.
+  const comp=(flat.join(' ').match(/Compet[eê]ncia:\s*((?:0[1-9]|1[0-2])\/20\d{2})\b/i)||[])[1]||'';
+  if(!records.length) throw new Error('Nenhum colaborador identificado no PDF. Confira se é um extrato mensal com texto selecionável.');
   return {records,pages:data.numPages,competence:comp};
 }
 
@@ -649,6 +651,8 @@ function renderHistory(){
     '<td>'+esc(new Date(x.processedAt).toLocaleString('pt-BR'))+'</td></tr>').join('');
 }
 function renderApprovalStatus(){
+  const missing=state.original.filter(r=>r.net===null).length;
+  $('prepareFillBtn')?.classList.toggle('hidden',!missing||! /\.xlsx$/i.test(state.excelFile?.name||''));
   const actionable=actionableStatuses();
   const pend=state.results.filter(r=>actionable.has(r.status));
   const comparable=state.results.filter(r=>Number.isFinite(r.originalNet)&&Number.isFinite(r.folhaNet)&&r.status!==STATUS.TRCT);
@@ -657,7 +661,7 @@ function renderApprovalStatus(){
   el.classList.remove('hidden','approved','review','partial');
   if(!hasAnyOriginalValue || !comparable.length){
     el.classList.add('partial');
-    el.innerHTML='<div class="icon">◐</div><div><strong>Validação parcial</strong><span>Estrutura, CPF, nomes, presença/ausência, novos colaboradores e TRCT foram avaliados, mas não há líquido original suficiente para concluir a aprovação monetária.</span></div>';
+    el.innerHTML='<div class="icon">◐</div><div><strong>Validação parcial</strong><span>Não há líquido original suficiente para comparar valores. Use “Preencher líquidos com estes arquivos”, confira a prévia e gere uma cópia do Excel. Se os valores vierem deste mesmo PDF, a comparação posterior confirma a importação; não é uma conferência independente da folha.</span></div>';
   }else if(pend.length){
     el.classList.add('review');
     el.innerHTML='<div class="icon">⚠</div><div><strong>Requer conferência</strong><span>'+pend.length+' pendência(s) precisam ser revisada(s) antes do fechamento.</span></div>';
@@ -772,7 +776,8 @@ async function run(){
     saveHistory(pf.competence);
     $('summarySection').classList.remove('hidden'); $('pendingSection').classList.remove('hidden'); $('resultsSection').classList.remove('hidden'); $('diagnosticsSection').classList.remove('hidden');
     progress(100,'Concluído.'); setTimeout(()=>$('progressWrap').classList.add('hidden'),500);
-    msg('Comparação concluída: '+state.original.length+' registros no Excel e '+state.folha.length+' colaboradores identificados no PDF.');
+    const missing=state.original.filter(r=>r.net===null).length;
+    msg(missing ? 'Arquivos reconhecidos: '+state.original.length+' colaboradores no Excel e '+state.folha.length+' no PDF. Há '+missing+' líquido(s) vazio(s) no Excel. Preencha os líquidos antes de comparar esses valores.' : 'Comparação concluída: '+state.original.length+' registros no Excel e '+state.folha.length+' colaboradores identificados no PDF.',missing?'warning':'success');
   }catch(e){ console.error(e); $('progressWrap').classList.add('hidden'); msg(e?.message||'Erro ao processar os arquivos.','error'); }
   finally{ ready(); }
 }
@@ -808,6 +813,15 @@ $('divergenceOnlyBtn').addEventListener('click',()=>{
     '<td class="money">'+(r.folhaNet===null?'—':moneyFmt.format(r.folhaNet))+'</td>'+
     '<td class="money">'+(r.trctNet===null?'—':moneyFmt.format(r.trctNet))+'</td>'+
     '<td class="money">'+(r.diff===null?'—':moneyFmt.format(r.diff))+'</td><td>'+esc(r.matchKey||'—')+'</td></tr>').join('');
+});
+
+$('prepareFillBtn')?.addEventListener('click',async()=>{
+  if(!state.excelFile||!state.pdfFile)return;
+  state.fill.excelFile=state.excelFile; state.fill.pdfFile=state.pdfFile;
+  $('fillExcelStatus').textContent=state.excelFile.name;
+  $('fillPdfStatus').textContent=state.pdfFile.name;
+  fillReady(); switchModule('fill');
+  await runFill();
 });
 
 $('fillAnalyzeBtn').addEventListener('click',runFill);
