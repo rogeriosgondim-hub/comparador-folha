@@ -857,11 +857,14 @@ function renderAuditTable(){const rows=filteredAudit(),shown=rows.slice(0,state.
  $('auditBody').innerHTML=shown.map(r=>'<tr><td><span class="status '+(r.status==='DIVERGÊNCIA'?'divergencia':r.status==='COMPATÍVEL'?'ok':'verificar')+'">'+esc(r.status)+'</span></td><td>'+esc(r.name)+'</td><td>'+esc(fmtCpf(r.cpf))+'</td><td>'+esc(r.cell)+'</td><td>'+esc(r.field)+'</td><td>'+esc(r.excel)+'</td><td>'+esc(r.pdf)+'</td><td>'+esc(r.difference===null?'—':r.unit==='R$'?moneyFmt.format(r.difference):r.difference.toFixed(4)+' '+r.unit)+'</td><td>'+esc(r.reason)+'</td><td>'+esc(r.page)+'</td></tr>').join('');
  $('auditMore').classList.toggle('hidden',rows.length<=state.auditLimit);
 }
-function exportFieldAudit(){if(!state.auditRows.length)return;const wb=XLSX.utils.book_new();const data=state.auditRows.map(r=>({Status:r.status,Nome:r.name,CPF:fmtCpf(r.cpf),Coluna:r.col,Célula:r.cell,Campo:r.field,Excel:r.excel,PDF:r.pdf,Diferença:r.difference,Unidade:r.unit,Motivo:r.reason,'Página PDF':r.page,Chave:r.matchKey}));
+function exportFieldAudit(){if(!state.auditRows.length)return;try{const wb=XLSX.utils.book_new();const data=state.auditRows.map(r=>({Status:r.status,Nome:r.name,CPF:fmtCpf(r.cpf),Coluna:r.col,Célula:r.cell,Campo:r.field,Excel:r.excel,PDF:r.pdf,Diferença:r.difference,Unidade:r.unit,Motivo:r.reason,'Página PDF':r.page,Chave:r.matchKey}));
  const append=(name,rows)=>{const ws=XLSX.utils.json_to_sheet(rows);XLSX.utils.book_append_sheet(wb,ws,name);};
  append('Conferência C-AN',data);append('Divergências',data.filter(r=>r.Status==='DIVERGÊNCIA'));append('Pendências',data.filter(r=>AUDIT_ACTIONS.has(r.Status)&&r.Status!=='DIVERGÊNCIA'));append('Mapeamento',FIELD_SCHEMA.map(f=>({Coluna:f.col,Campo:f.label,Tipo:f.kind,Rubricas:f.codes.join(', '),Descrição:f.pattern,Limitação:f.kind==='unavailable'?'Sem equivalente no PDF':'Conferir unidades e vínculo; ausência não equivale a aprovação'})));
  append('Rubricas PDF',state.auditPdf.flatMap(p=>(p.fields?.rubrics||[]).map(r=>({Nome:p.rawName,CPF:fmtCpf(p.cpf),Página:p.page,Código:r.code,Descrição:r.label,Referência:r.reference,Valor:r.value,Tipo:r.type}))));
- XLSX.writeFile(wb,'Conferencia_C_AN_Folha_'+new Date().toISOString().slice(0,10)+'.xlsx');
+ const bytes=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+ downloadBlob(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'Conferencia_C_AN_Folha_'+new Date().toISOString().slice(0,10)+'.xlsx');
+ msg('Conferência completa gerada: '+state.auditRows.length+' campos, com divergências, pendências, mapeamento e rubricas do PDF.');
+ }catch(e){msg(e?.message||'Não foi possível gerar a conferência completa.','error');}
 }
 $('auditSearch')?.addEventListener('input',()=>{state.auditLimit=200;renderAuditTable();});
 ['auditStatus','auditField'].forEach(id=>$(id)?.addEventListener('change',()=>{state.auditLimit=200;renderAuditTable();}));
