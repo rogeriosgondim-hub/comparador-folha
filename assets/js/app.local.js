@@ -1,8 +1,9 @@
 import * as pdfjsLib from '../vendor/pdfjs-4/pdf.min.mjs';
+import { FIELD_SCHEMA, parseFieldPdf, auditFields, auditSummary } from './field-audit.js';
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/vendor/pdfjs-4/pdf.worker.min.mjs';
 
 const $ = id => document.getElementById(id);
-const state = { excelFile:null, pdfFile:null, original:[], folha:[], results:[], diagnostics:{}, fill:{excelFile:null,pdfFile:null,excel:null,pdf:null,rows:[],competence:''} };
+const state = { excelFile:null, pdfFile:null, original:[], folha:[], results:[], diagnostics:{}, auditRows:[], auditPdf:[], auditLimit:200, fill:{excelFile:null,pdfFile:null,excel:null,pdf:null,rows:[],competence:''} };
 
 const STATUS = {
   OK:'OK', DIV:'DIVERGÊNCIA', CENT:'DIFERENÇA DE CENTAVOS', TRCT:'TRCT',
@@ -126,7 +127,11 @@ async function parseExcel(file){
     const obs=c.obs!==undefined?String(row[c.obs]??'').trim():'';
     const type=c.type!==undefined?String(row[c.type]??'').trim():'';
     const netRaw=c.net!==undefined?row[c.net]:'';
-    out.push({source:'ORIGINAL',row:r+1,rawName,nameNorm,cpf:ccpf,type,obs,net:money(netRaw),netRaw:String(netRaw??''),netCell:c.net!==undefined?colLetter(c.net)+(r+1):'',isTRCT:hasTrct(rawName,obs),isNew:hasNovo(rawName,obs)});
+    const auditCells={};
+    for(const field of FIELD_SCHEMA){const cell=wb.Sheets[chosen.sheetName][field.col+(r+1)];const header=String(chosen.rows[chosen.header.row][colIndexFromRef(field.col)]??'');
+      if(header)auditCells[field.col]={header,value:cell?.v??null,display:cell?.w||String(row[colIndexFromRef(field.col)]??'')};
+    }
+    out.push({source:'ORIGINAL',auditCells,row:r+1,rawName,nameNorm,cpf:ccpf,type,obs,net:money(netRaw),netRaw:String(netRaw??''),netCell:c.net!==undefined?colLetter(c.net)+(r+1):'',isTRCT:hasTrct(rawName,obs),isNew:hasNovo(rawName,obs)});
   }
   return {records:out,sheetName:chosen.sheetName,headerRow:chosen.header.row+1};
 }
@@ -205,7 +210,7 @@ function parsePdfPage(lines,page){
       }
     }
 
-    records.push({source:'FOLHA',page,rawName,nameNorm:normName(rawName),cpf:ccpf,type:vinc,obs:situation,net,trctValue,isTRCT:hasTrct(text,situation)||trctValue!==null});
+    records.push({source:'FOLHA',fields:parseFieldPdf(block),page,rawName,nameNorm:normName(rawName),cpf:ccpf,type:vinc,obs:situation,net,trctValue,isTRCT:hasTrct(text,situation)||trctValue!==null});
     i=end-1;
   }
   return records;
@@ -767,6 +772,7 @@ function exportXlsx(){
 }
 
 async function run(){
+  $('fieldAuditSection')?.classList.add('hidden');
   hideMsg(); $('summarySection').classList.add('hidden'); $('pendingSection').classList.add('hidden'); $('resultsSection').classList.add('hidden'); $('diagnosticsSection').classList.add('hidden');
   $('compareBtn').disabled=true;
   try{
@@ -777,18 +783,20 @@ async function run(){
     progress(75,'Comparando CPF, nomes e valores...');
     const tol=Number($('tolerance').value||.01), cents=Math.max(tol,Number($('centsLimit').value||1));
     state.results=compare(state.original,state.folha,tol,cents);
+    state.auditRows=auditFields(ex.records,pf.records,tol); state.auditPdf=pf.records;state.auditLimit=200;renderFieldAudit();
     state.diagnostics={sheetName:ex.sheetName,headerRow:ex.headerRow,originalCount:ex.records.length,pdfPages:pf.pages,folhaCount:pf.records.length};
     renderSummary(); renderApprovalStatus(); renderPending(); renderResults(); renderDiag();
     saveHistory(pf.competence);
     $('summarySection').classList.remove('hidden'); $('pendingSection').classList.remove('hidden'); $('resultsSection').classList.remove('hidden'); $('diagnosticsSection').classList.remove('hidden');
     progress(100,'Concluído.'); setTimeout(()=>$('progressWrap').classList.add('hidden'),500);
     const missing=state.original.filter(r=>r.net===null).length;
-    msg(missing ? 'Arquivos reconhecidos: '+state.original.length+' colaboradores no Excel e '+state.folha.length+' no PDF. Há '+missing+' líquido(s) vazio(s) no Excel. Preencha os líquidos antes de comparar esses valores.' : 'Comparação concluída: '+state.original.length+' registros no Excel e '+state.folha.length+' colaboradores identificados no PDF.',missing?'warning':'success');
+    msg(missing ? 'Arquivos reconhecidos: '+state.original.length+' colaboradores no Excel e '+state.folha.length+' no PDF. Conferência C–AN concluída. Há '+missing+' líquido(s) vazio(s); salário, cadastro e rubricas disponíveis foram conferidos separadamente.' : 'Comparação concluída: '+state.original.length+' registros no Excel e '+state.folha.length+' colaboradores identificados no PDF.',missing?'warning':'success');
   }catch(e){ console.error(e); $('progressWrap').classList.add('hidden'); msg(e?.message||'Erro ao processar os arquivos.','error'); }
   finally{ ready(); }
 }
 function reset(){
-  Object.assign(state,{excelFile:null,pdfFile:null,original:[],folha:[],results:[],diagnostics:{}});
+  Object.assign(state,{excelFile:null,pdfFile:null,original:[],folha:[],results:[],diagnostics:{},auditRows:[],auditPdf:[]});
+  $('fieldAuditSection')?.classList.add('hidden');
   $('excelFile').value='';$('pdfFile').value='';$('excelStatus').textContent='Nenhum arquivo selecionado.';$('pdfStatus').textContent='Nenhum arquivo selecionado.';
   $('summarySection').classList.add('hidden');$('pendingSection').classList.add('hidden');$('resultsSection').classList.add('hidden');$('diagnosticsSection').classList.add('hidden');hideMsg();$('progressWrap').classList.add('hidden');ready();
 }
@@ -836,3 +844,26 @@ $('fillGenerateBtn').addEventListener('click',generateFilledExcel);
 $('fillAuditBtn').addEventListener('click',exportFillAudit);
 $('fillSearchInput').addEventListener('input',renderFillPreview);
 $('fillStatusFilter').addEventListener('change',renderFillPreview);
+
+const AUDIT_ACTIONS=new Set(['DIVERGÊNCIA','RUBRICA AUSENTE NO PDF','SEM VALOR NO EXCEL','VALOR NÃO RECONHECIDO NO PDF','CORRESPONDÊNCIA AMBÍGUA','COLABORADOR AUSENTE NO PDF','COLABORADOR AUSENTE NO EXCEL','COLUNA NÃO IDENTIFICADA','CABEÇALHO DIFERENTE','EXTRAÇÃO INCOMPLETA']);
+function filteredAudit(){const q=norm($('auditSearch').value),sf=$('auditStatus').value,col=$('auditField').value;return state.auditRows.filter(r=>(sf==='ALL'||(sf==='ACTION'?AUDIT_ACTIONS.has(r.status):r.status===sf))&&(col==='ALL'||r.col===col)&&(!q||norm(r.name+' '+r.cpf+' '+r.field+' '+r.reason).includes(q)));}
+function renderFieldAudit(){
+ $('fieldAuditSection').classList.remove('hidden');const sum=auditSummary(state.auditRows);
+ $('auditMetrics').innerHTML=[['Campos analisados',sum.fields],['Comparações compatíveis',sum.compatible],['Divergências',sum.divergences],['Sem valor no Excel',sum.missingExcel],['Rubricas ausentes no PDF',sum.missingRubric],['Conferência manual',sum.manual],['Sem equivalente no PDF',sum.unavailable],['Não reconhecidos no PDF',sum.unreadable]].map(([l,v])=>'<div class="metric '+(l==='Divergências'&&v?'bad':'info')+'"><span class="label">'+l+'</span><span class="value">'+v+'</span></div>').join('');
+ $('auditField').innerHTML='<option value="ALL">Todas as colunas C a AN</option>'+FIELD_SCHEMA.map(f=>'<option value="'+f.col+'">'+f.col+' — '+esc(f.label)+'</option>').join('');
+ $('auditMapping').innerHTML=FIELD_SCHEMA.map(f=>'<tr><td>'+f.col+'</td><td>'+esc(f.label)+'</td><td>'+esc(f.kind==='unavailable'?'Sem equivalente neste extrato':f.codes.length?'Rubricas '+f.codes.join(', '):['name','category','admission','stipend','salary','cpf','net'].includes(f.kind)?'Campo do cadastro / salário / líquido':f.pattern?'Descrição da rubrica (tipo e unidade conferidos)':'Conferência manual')+'</td></tr>').join('');renderAuditTable();
+}
+function renderAuditTable(){const rows=filteredAudit(),shown=rows.slice(0,state.auditLimit);$('auditCount').textContent=shown.length+' de '+rows.length+' campo(s) neste filtro; '+state.auditRows.length+' campos no total.';
+ $('auditBody').innerHTML=shown.map(r=>'<tr><td><span class="status '+(r.status==='DIVERGÊNCIA'?'divergencia':r.status==='COMPATÍVEL'?'ok':'verificar')+'">'+esc(r.status)+'</span></td><td>'+esc(r.name)+'</td><td>'+esc(fmtCpf(r.cpf))+'</td><td>'+esc(r.cell)+'</td><td>'+esc(r.field)+'</td><td>'+esc(r.excel)+'</td><td>'+esc(r.pdf)+'</td><td>'+esc(r.difference===null?'—':r.unit==='R$'?moneyFmt.format(r.difference):r.difference.toFixed(4)+' '+r.unit)+'</td><td>'+esc(r.reason)+'</td><td>'+esc(r.page)+'</td></tr>').join('');
+ $('auditMore').classList.toggle('hidden',rows.length<=state.auditLimit);
+}
+function exportFieldAudit(){if(!state.auditRows.length)return;const wb=XLSX.utils.book_new();const data=state.auditRows.map(r=>({Status:r.status,Nome:r.name,CPF:fmtCpf(r.cpf),Coluna:r.col,Célula:r.cell,Campo:r.field,Excel:r.excel,PDF:r.pdf,Diferença:r.difference,Unidade:r.unit,Motivo:r.reason,'Página PDF':r.page,Chave:r.matchKey}));
+ const append=(name,rows)=>{const ws=XLSX.utils.json_to_sheet(rows);XLSX.utils.book_append_sheet(wb,ws,name);};
+ append('Conferência C-AN',data);append('Divergências',data.filter(r=>r.Status==='DIVERGÊNCIA'));append('Pendências',data.filter(r=>AUDIT_ACTIONS.has(r.Status)&&r.Status!=='DIVERGÊNCIA'));append('Mapeamento',FIELD_SCHEMA.map(f=>({Coluna:f.col,Campo:f.label,Tipo:f.kind,Rubricas:f.codes.join(', '),Descrição:f.pattern,Limitação:f.kind==='unavailable'?'Sem equivalente no PDF':'Conferir unidades e vínculo; ausência não equivale a aprovação'})));
+ append('Rubricas PDF',state.auditPdf.flatMap(p=>(p.fields?.rubrics||[]).map(r=>({Nome:p.rawName,CPF:fmtCpf(p.cpf),Página:p.page,Código:r.code,Descrição:r.label,Referência:r.reference,Valor:r.value,Tipo:r.type}))));
+ XLSX.writeFile(wb,'Conferencia_C_AN_Folha_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+$('auditSearch')?.addEventListener('input',()=>{state.auditLimit=200;renderAuditTable();});
+['auditStatus','auditField'].forEach(id=>$(id)?.addEventListener('change',()=>{state.auditLimit=200;renderAuditTable();}));
+$('auditMore')?.addEventListener('click',()=>{state.auditLimit+=200;renderAuditTable();});
+$('auditExport')?.addEventListener('click',exportFieldAudit);

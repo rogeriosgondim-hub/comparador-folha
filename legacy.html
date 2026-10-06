@@ -7,14 +7,14 @@
   <meta name="referrer" content="no-referrer" />
   <meta name="description" content="Ferramentas locais para comparar folha de pagamento e preencher automaticamente o líquido no Excel a partir do PDF." />
   <title>Folha de Pagamento — Comparador e Preenchimento</title>
-  <link rel="stylesheet" href="assets/css/styles.css?v=20261006b" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20261006c" />
 </head>
 <body>
   <header class="topbar">
     <div>
       <p class="eyebrow">Processamento 100% local no navegador</p>
       <h1>Folha de Pagamento</h1>
-      <p class="subtitle">Compare a folha ou preencha automaticamente a remuneração líquida no Excel a partir do PDF, com CPF como chave principal e tratamento separado de TRCT/rescisões.</p>
+      <p class="subtitle">Compare salário, cadastro e rubricas da folha ou preencha automaticamente a remuneração líquida no Excel a partir do PDF, com CPF como chave principal e tratamento separado de TRCT/rescisões.</p>
     </div>
     <div class="privacy-badge">🔒 Arquivos não são enviados</div>
   </header>
@@ -75,7 +75,7 @@
       <div class="section-heading">
         <div>
           <p class="eyebrow">Resultado</p>
-          <h2>2. Painel de resumo</h2>
+          <h2>2. Painel de resumo — líquido</h2>
         </div>
         <button id="exportBtn" class="primary">Exportar divergências para Excel</button>
       </div>
@@ -85,11 +85,20 @@
       <div id="summaryCards" class="summary-grid"></div>
     </section>
 
+    <section id="fieldAuditSection" class="card hidden">
+      <div class="section-heading"><div><p class="eyebrow">Conferência ampliada</p><h2>Conferência por campo — C a AN</h2><p>Salário, cadastro e rubricas são conferidos mesmo com o líquido vazio. A comparação de líquido permanece separada abaixo.</p></div><button id="auditExport" class="primary" type="button">Exportar conferência completa</button></div>
+      <div class="info-note">Campos sem equivalente no extrato não são aprovados. Ausência de rubrica não é convertida em zero. Jornada semanal, benefícios, faltas, observações e consignados podem exigir conferência manual. “Salário” é comparado com salário-base ou bolsa conforme o vínculo, sem usar o total de proventos.</div>
+      <div id="auditMetrics" class="summary-grid"></div>
+      <div class="filters"><input id="auditSearch" type="search" placeholder="Buscar colaborador, CPF ou campo..." aria-label="Busca da conferência ampliada" /><select id="auditField" aria-label="Coluna a conferir"><option value="ALL">Todas as colunas C a AN</option></select><select id="auditStatus" aria-label="Status por campo"><option value="ACTION">Divergências e dados pendentes</option><option value="ALL">Todos os campos</option><option value="DIVERGÊNCIA">Só divergências</option><option value="COMPATÍVEL">Compatíveis</option><option value="SEM VALOR NO EXCEL">Sem valor no Excel</option><option value="RUBRICA AUSENTE NO PDF">Rubrica ausente no PDF</option><option value="CONFERÊNCIA MANUAL">Conferência manual</option><option value="SEM EQUIVALENTE NO PDF">Sem equivalente no PDF</option><option value="SEM MOVIMENTO">Sem movimento</option></select></div>
+      <p id="auditCount"></p><div class="table-wrap"><table><thead><tr><th>Status</th><th>Nome</th><th>CPF</th><th>Célula</th><th>Campo</th><th>Excel</th><th>PDF</th><th>Diferença</th><th>Motivo / regra</th><th>Página PDF</th></tr></thead><tbody id="auditBody"></tbody></table></div><button id="auditMore" class="secondary hidden" type="button">Mostrar mais 200 campos</button>
+      <details><summary>Mapeamento das 38 colunas e limites da conferência</summary><div class="table-wrap"><table><thead><tr><th>Coluna</th><th>Campo</th><th>Fonte / regra</th></tr></thead><tbody id="auditMapping"></tbody></table></div></details>
+    </section>
+
     <section id="pendingSection" class="card hidden">
       <div class="section-heading table-heading">
         <div>
           <p class="eyebrow">Ação necessária</p>
-          <h2>3. Pendências para conferência</h2>
+          <h2>3. Pendências da comparação de líquido</h2>
           <p id="pendingCount"></p>
         </div>
       </div>
@@ -115,7 +124,7 @@
     <section id="resultsSection" class="card hidden">
       <div class="section-heading table-heading">
         <div>
-          <h2>4. Resultado detalhado</h2>
+          <h2>4. Resultado detalhado — líquido</h2>
           <p id="resultCount"></p>
         </div>
         <div class="filters">
@@ -166,7 +175,7 @@
       <div class="section-heading table-heading">
         <div>
           <p class="eyebrow">Somente neste navegador</p>
-          <h2>5. Histórico resumido das competências</h2>
+          <h2>5. Histórico da comparação de líquido</h2>
           <p>São armazenados apenas totais e indicadores da comparação. Nomes, CPFs, PDFs e planilhas não são salvos.</p>
         </div>
         <button id="clearHistoryBtn" class="secondary" type="button">Limpar histórico</button>
@@ -309,6 +318,6 @@
 
   <script src="assets/vendor/xlsx/xlsx.full.min.js"></script>
   <script src="assets/vendor/jszip/jszip.min.js"></script>
-  <script type="module" src="assets/js/app.local.js?v=20261006b"></script>
+  <script type="module" src="assets/js/app.local.js?v=20261006c"></script>
 </body>
 </html>
